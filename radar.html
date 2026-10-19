@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Radar de Arbitragem</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: mesa de operação — faixa de sinal no topo, depois controles, oportunidades, simulador e acompanhamento */
+:root{
+  --bg:#0e1215; --panel:#151b20; --panel2:#1b2228; --line:#26303700; --rule:#26303a;
+  --fg:#e3e8eb; --muted:#8693a0; --faint:#56626d;
+  --accent:#4d8dff; --accent-soft:#4d8dff22;
+  --good:#38c48a; --good-soft:#38c48a1f; --bad:#ee6a5f; --bad-soft:#ee6a5f1f;
+  --warn:#f0b54a; --warn-soft:#f0b54a1f;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--sans);padding:20px 16px 48px}
+.wrap{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1{font-size:20px;margin:0;letter-spacing:-.01em;font-weight:700}
+h2{font-size:13px;margin:0;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)} .faint{color:var(--faint)}
+.good{color:var(--good)} .bad{color:var(--bad)} .warn{color:var(--warn)}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--rule);background:var(--panel2);border-radius:8px;padding:7px 12px}
+button:hover{border-color:var(--accent)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+input,select{background:var(--bg);border:1px solid var(--rule);border-radius:8px;padding:7px 10px;min-width:0}
+label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+
+header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.live{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--faint)}
+.dot.on{background:var(--good);box-shadow:0 0 0 0 var(--good);animation:pulse 2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 #38c48a66}70%{box-shadow:0 0 0 8px #38c48a00}100%{box-shadow:0 0 0 0 #38c48a00}}
+@media (prefers-reduced-motion:reduce){.dot.on{animation:none}}
+
+.signal{border-radius:14px;padding:18px 20px;display:grid;grid-template-columns:auto 1fr auto;gap:18px;align-items:center;border:1px solid var(--rule);background:var(--panel)}
+.signal .tag{justify-self:start;font-weight:700;font-size:13px;letter-spacing:.1em;padding:8px 14px;border-radius:999px;white-space:nowrap}
+.signal.entrar{border-color:var(--good);background:linear-gradient(90deg,var(--good-soft),transparent 70%)}
+.signal.entrar .tag{background:var(--good);color:#06150e}
+.signal.confirmando{border-color:var(--warn)}
+.signal.confirmando .tag{background:var(--warn);color:#1d1404}
+.signal.aguardar .tag{background:var(--panel2);color:var(--muted);border:1px solid var(--rule)}
+.signal .big{font-size:18px;font-weight:600}
+.signal .sub{color:var(--muted);font-size:13px;margin-top:2px}
+.signal .val{text-align:right}
+.signal .val .n{font-size:26px;font-weight:600}
+@media (max-width:720px){.signal{grid-template-columns:1fr}.signal .val{text-align:left}}
+
+.card{background:var(--panel);border:1px solid var(--rule);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;align-items:end}
+.seg{display:flex;border:1px solid var(--rule);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0;flex:1;background:transparent;padding:7px 8px;font-size:13px}
+.seg button.on{background:var(--accent-soft);color:var(--fg);box-shadow:inset 0 -2px 0 var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border-radius:999px;padding:5px 12px;font-size:13px;display:flex;align-items:center;gap:6px}
+.chip::before{content:"";width:7px;height:7px;transform:rotate(45deg);background:var(--faint)}
+.chip.on{border-color:var(--accent);background:var(--accent-soft)}
+.chip.on::before{background:var(--accent)}
+.chip.err::after{content:"!";color:var(--bad);font-weight:700}
+details summary{cursor:pointer;color:var(--muted);font-size:13px}
+.fees{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:10px}
+
+.scroll{overflow-x:auto;margin:0 -16px;padding:0 16px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{text-align:left;font-weight:500;color:var(--muted);font-size:12px;padding:6px 10px;border-bottom:1px solid var(--rule);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid var(--rule);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.r,th.r{text-align:right}
+tbody tr:hover{background:var(--panel2)}
+.pill{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;padding:3px 8px;border-radius:999px}
+.p-entrar{background:var(--good);color:#06150e}
+.p-conf{background:var(--warn-soft);color:var(--warn)}
+.p-perto{background:var(--accent-soft);color:var(--accent)}
+.p-neg{background:transparent;color:var(--faint);border:1px solid var(--rule)}
+.p-susp{background:var(--bad-soft);color:var(--bad)}
+.mtx td{font-size:12px}
+.mtx .cell{display:flex;flex-direction:column;line-height:1.3}
+.best-ask{color:var(--good);font-weight:600}
+.best-bid{color:var(--accent);font-weight:600}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+
+.grid2{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:16px}
+@media (max-width:900px){.grid2{grid-template-columns:1fr}}
+
+.receipt{display:flex;flex-direction:column;gap:0;font-size:13px}
+.receipt .row{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px dashed var(--rule)}
+.receipt .row span:first-child{color:var(--muted)}
+.receipt .step{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);padding:12px 0 2px;font-weight:600}
+.receipt .total{border-bottom:0;padding-top:12px;font-size:16px;font-weight:600}
+.receipt .total span:first-child{color:var(--fg)}
+.note{font-size:12px;color:var(--muted);background:var(--panel2);border-radius:8px;padding:10px 12px}
+.note.warn{color:var(--warn);background:var(--warn-soft)}
+.empty{color:var(--faint);font-size:13px;padding:14px 0}
+
+.track{border:1px solid var(--rule);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.track .t1{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center}
+.track .t2{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:12px}
+.track .t2 b{display:block;font-size:14px;font-weight:600}
+
+.log{max-height:280px;overflow:auto;display:flex;flex-direction:column;font-size:13px}
+.log div{padding:6px 0;border-bottom:1px solid var(--rule);display:flex;gap:10px}
+.log .h{color:var(--faint);font-family:var(--mono);flex:none}
+svg text{fill:var(--muted);font:10px var(--mono)}
+.cot{font-size:13px;border:1px solid var(--rule);border-radius:999px;padding:5px 12px;display:flex;gap:6px;align-items:baseline;flex-wrap:wrap}
+footer{font-size:12px;color:var(--faint);line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div>
+    <h1>Radar de Arbitragem</h1>
+    <div class="muted" style="font-size:13px">Preços ao vivo em <span id="nCorr">9</span> corretoras · valores em reais · tudo já descontando taxas</div>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <div class="cot"><span class="muted">Dólar hoje</span> <b class="num" id="cotVal">—</b> <span class="faint" id="cotFonte"></span></div>
+    <div class="live"><span class="dot" id="dot"></span><span id="liveTxt">conectando…</span></div>
+    <button id="btnAlert">Ativar alertas</button>
+  </div>
+</header>
+
+<section class="signal aguardar" id="signal">
+  <span class="tag" id="sigTag">AGUARDAR</span>
+  <div><div class="big" id="sigTxt">Lendo preços…</div><div class="sub" id="sigSub"></div></div>
+  <div class="val"><div class="n num" id="sigVal">—</div><div class="sub" id="sigValSub"></div></div>
+</section>
+
+<section class="card">
+  <div class="controls">
+    <label>Valor que você coloca (R$)
+      <input id="cValor" type="number" min="10" step="100" class="num">
+    </label>
+    <label>Lucro mínimo para entrar (%)
+      <input id="cMin" type="number" step="0.05" class="num">
+    </label>
+    <label>Como você opera
+      <div class="seg" id="cModo">
+        <button data-v="1">Transferindo</button>
+        <button data-v="0">Saldo nas duas</button>
+      </div>
+    </label>
+    <label style="grid-column:span 2;min-width:0">Moedas (separadas por vírgula)
+      <input id="cMoedas" class="num">
+    </label>
+  </div>
+  <div class="chips" id="cCorr"></div>
+  <div class="faint" style="font-size:12px" id="modoExpl"></div>
+  <details>
+    <summary>Ajustar taxas de cada corretora e taxas de saque</summary>
+    <div style="margin-top:10px;font-size:12px" class="muted">Taxa de negociação (%) — use a da sua conta. Desconto com token da corretora ou nível VIP diminui.</div>
+    <div class="fees" id="fTaxas"></div>
+    <div style="margin-top:14px;font-size:12px" class="muted">Taxa de saque (em unidades da moeda, rede mais barata). Valores aproximados: confira na tela de saque antes de operar.</div>
+    <div class="fees" id="fSaques"></div>
+  </details>
+  <div><button class="primary" id="btnSalvar">Aplicar</button> <span class="muted" id="salvoTxt" style="font-size:12px;margin-left:8px"></span></div>
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <h2>Oportunidades agora</h2>
+    <div class="legend">
+      <span><span class="pill p-entrar">ENTRAR</span> confirmado</span>
+      <span><span class="pill p-conf">CONFIRMANDO</span> 1ª leitura</span>
+      <span><span class="pill p-perto">PERTO</span> positivo</span>
+      <span><span class="pill p-susp">SUSPEITO</span> diferença alta demais</span>
+    </div>
+  </div>
+  <div class="scroll"><table>
+    <thead><tr><th>Moeda</th><th>Comprar em</th><th>Vender em</th><th class="r">Preço compra (R$)</th><th class="r">Preço venda (R$)</th><th class="r">Diferença</th><th class="r">Líquido</th><th class="r">Resultado</th><th>Sinal</th><th></th></tr></thead>
+    <tbody id="tOps"></tbody>
+  </table></div>
+  <div class="faint" style="font-size:12px">Calculado com o melhor preço do livro e o valor informado. Para valores maiores, use “Simular”: ele percorre o livro de ofertas e mostra o preço médio real.</div>
+</section>
+
+<div class="grid2">
+  <section class="card" id="simCard">
+    <div class="card-head"><h2>Simulador: quanto entra, quanto sai</h2></div>
+    <div class="controls">
+      <label>Moeda<select id="sMoeda" class="num"></select></label>
+      <label>Comprar em<select id="sCompra"></select></label>
+      <label>Vender em<select id="sVenda"></select></label>
+      <label>Valor (R$)<input id="sValor" type="number" min="10" step="100" class="num"></label>
+    </div>
+    <div><button class="primary" id="btnSim">Calcular com o livro de ofertas</button></div>
+    <div id="simOut"><div class="empty">Escolha uma oportunidade na tabela ou monte a sua aqui.</div></div>
+  </section>
+
+  <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+    <section class="card">
+      <div class="card-head"><h2>Operações em andamento</h2></div>
+      <div id="tracks"><div class="empty">Depois de simular, clique em “Acompanhar” para o painel dizer quando vender.</div></div>
+    </section>
+    <section class="card">
+      <div class="card-head"><h2>Melhor oportunidade nos últimos minutos</h2><span class="faint" style="font-size:12px">% líquido</span></div>
+      <div id="chart"></div>
+    </section>
+  </div>
+</div>
+
+<section class="card">
+  <div class="card-head"><h2>Preços por corretora</h2>
+    <div class="legend"><span class="best-ask">mais barato p/ comprar</span><span class="best-bid">paga mais p/ vender</span><span>em reais · em cima: compra · embaixo: venda</span></div>
+  </div>
+  <div class="note warn" id="errosTxt" hidden></div>
+  <div class="scroll"><table class="mtx"><thead id="mHead"></thead><tbody id="mBody"></tbody></table></div>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2>Histórico de sinais</h2><button id="btnLimpar">Limpar histórico</button></div>
+  <div class="log" id="log"><div class="empty">Nenhum sinal ainda.</div></div>
+</section>
+
+<footer>
+  Este painel só lê preços públicos e não faz ordens. Os sinais rodam enquanto a página está aberta. Ele não prevê o mercado: mostra diferenças que existem agora.
+  Antes de transferir, confira se o depósito e o saque da moeda estão liberados nas duas corretoras e na mesma rede,
+  e lembre que a diferença pode sumir enquanto a transferência está a caminho. Diferenças acima de 5% quase sempre são armadilha
+  (rede suspensa, moeda diferente com o mesmo nome ou pouca liquidez). Não é recomendação de investimento.
+</footer>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const NOMES = {binance:"Binance",bitget:"Bitget",bybit:"Bybit",kucoin:"KuCoin",gate:"Gate.io",mexc:"MEXC",okx:"OKX",bingx:"BingX",coinex:"CoinEx"};
+const PADRAO = {
+  moedas: ["BTC","ETH","SOL","XRP","DOGE","ADA","TRX","LTC","AVAX","LINK","TON","SUI"],
+  corretoras: Object.keys(NOMES),
+  // taxa de negociação "taker" (ordem a mercado), conta comum, em %
+  taxas: {binance:0.10,bitget:0.10,bybit:0.10,kucoin:0.10,gate:0.10,mexc:0.05,okx:0.10,bingx:0.10,coinex:0.20},
+  // taxa de saque estimada em unidades da moeda (rede mais barata)
+  saques: {BTC:0.0002,ETH:0.0005,SOL:0.01,XRP:0.2,DOGE:4,ADA:1,TRX:1,LTC:0.001,AVAX:0.01,LINK:0.3,TON:0.05,SUI:0.1,DOT:0.1,BNB:0.0005,USDT:1},
+  valor_brl: 5000, minimo: 0.30, transferir: true,
+};
+const CONFIRMACOES = 2, LIMITE_SUSPEITO = 5, INTERVALO_MS = 5000;
+
+function lerLS(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } }
+function salvarLS(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+const clone = o => JSON.parse(JSON.stringify(o));
+
+let cfg = Object.assign(clone(PADRAO), lerLS("radar_cfg", {}));
+cfg.taxas = Object.assign(clone(PADRAO.taxas), cfg.taxas || {});
+cfg.saques = Object.assign(clone(PADRAO.saques), cfg.saques || {});
+let cfgLocal = clone(cfg);
+let dados = null, ops = [], COT = 0;
+let seguidas = new Map(), ativas = new Set(), historico = [];
+let eventos = lerLS("radar_eventos", []);
+let tracks = lerLS("radar_tracks", []);
+let alertas = false, primeiro = true, ultimaOk = 0;
+
+const nf = (n, d=2) => n == null || isNaN(n) ? "—" : n.toLocaleString("pt-BR",{minimumFractionDigits:d,maximumFractionDigits:d});
+const px = n => { if(n==null || isNaN(n)) return "—"; const d = n>=1000?2:n>=1?4:n>=0.01?6:8; return n.toLocaleString("pt-BR",{minimumFractionDigits:Math.min(d,2),maximumFractionDigits:d}); };
+const pct = n => (n>0?"+":"") + nf(n, 2) + "%";
+const brl = n => "R$ " + nf(n, 2);
+const rs = n => (n>0?"+":n<0?"−":"") + "R$ " + nf(Math.abs(n), 2);
+const pxr = n => n == null ? "—" : px(n * COT);
+const qt = n => n.toLocaleString("pt-BR",{maximumFractionDigits:8});
+const hora = t => new Date(t*1000).toLocaleTimeString("pt-BR");
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const chave = o => [o.moeda, o.compra, o.venda].join("|");
+
+async function api(path){
+  const r = await fetch(path, {cache:"no-store"});
+  let j; try{ j = await r.json(); }catch(e){ throw new Error("resposta inválida do servidor"); }
+  if(!r.ok) throw new Error(j.erro || "erro " + r.status);
+  return j;
+}
+
+// ---------- cálculo: comprar numa corretora, vender na outra, com taxas
+function calcular(){
+  const lista = [];
+  if(!dados || !COT) return lista;
+  const valor = cfg.valor_brl / COT;               // em dólar digital
+  for(const m of cfg.moedas){
+    const ofertas = cfg.corretoras.filter(c => dados.precos[c] && dados.precos[c][m]).map(c => [c, dados.precos[c][m]]);
+    for(const [ca, pa] of ofertas) for(const [cb, pb] of ofertas){
+      if(ca === cb) continue;
+      const ask = pa.ask, bid = pb.bid;
+      const fa = (cfg.taxas[ca] ?? 0.1) / 100, fb = (cfg.taxas[cb] ?? 0.1) / 100;
+      const qtd = valor / ask * (1 - fa);
+      const saque = cfg.transferir ? (+cfg.saques[m] || 0) : 0;
+      const chega = Math.max(qtd - saque, 0);
+      const final = chega * bid * (1 - fb);
+      const lucro = final - valor;
+      const bruto = (bid / ask - 1) * 100;
+      lista.push({moeda:m, compra:ca, venda:cb, ask, bid, bruto, liquido: lucro / valor * 100, lucro, final, suspeito: bruto > LIMITE_SUSPEITO});
+    }
+  }
+  return lista.sort((a, b) => b.liquido - a.liquido);
+}
+
+function registrar(tipo, texto){
+  eventos.unshift({t: Date.now()/1000, tipo, texto});
+  eventos = eventos.slice(0, 100); salvarLS("radar_eventos", eventos);
+  avisar(tipo === "entrar" ? "Sinal: ENTRAR" : "Oportunidade fechou", texto, tipo === "entrar" ? 880 : 440);
+}
+
+// sinais de entrar e de fechar
+function processar(){
+  ops = calcular();
+  const vistos = new Set();
+  for(const o of ops){
+    if(o.suspeito || o.liquido < cfg.minimo) continue;
+    const k = chave(o); vistos.add(k);
+    seguidas.set(k, (seguidas.get(k) || 0) + 1);
+    if(seguidas.get(k) >= CONFIRMACOES && !ativas.has(k)){
+      ativas.add(k);
+      registrar("entrar", `ENTRAR ${o.moeda}: comprar na ${NOMES[o.compra]} a R$ ${pxr(o.ask)} e vender na ${NOMES[o.venda]} a R$ ${pxr(o.bid)} → ${pct(o.liquido)} (${rs(o.lucro * COT)})`);
+    }
+  }
+  for(const k of [...seguidas.keys()]) if(!vistos.has(k)) seguidas.delete(k);
+  const atual = new Map(ops.map(o => [chave(o), o]));
+  for(const k of [...ativas]){
+    const o = atual.get(k);
+    if(!o || o.liquido < 0){
+      ativas.delete(k);
+      const [m, a, b] = k.split("|");
+      registrar("sair", `FECHOU ${m} ${NOMES[a]} → ${NOMES[b]}: a diferença acabou${o ? " (" + pct(o.liquido) + ")" : ""}`);
+    }
+  }
+  const limpas = ops.filter(o => !o.suspeito);
+  if(limpas.length){ historico.push([dados.t, limpas[0].liquido]); historico = historico.slice(-240); }
+}
+
+// ---------- configuração
+function montarControles(){
+  cfgLocal = clone(cfg);
+  $("#cValor").value = cfg.valor_brl; $("#cMin").value = cfg.minimo;
+  $("#cMoedas").value = cfg.moedas.join(", ");
+  $("#sValor").value = cfg.valor_brl;
+  desenharModo(); desenharChips(); desenharTaxas();
+}
+function desenharModo(){
+  document.querySelectorAll("#cModo button").forEach(b => b.classList.toggle("on", (b.dataset.v==="1") === cfgLocal.transferir));
+  $("#modoExpl").textContent = cfgLocal.transferir
+    ? "Transferindo: compra numa corretora, saca a moeda e vende na outra. A taxa de saque entra na conta e há risco do preço mudar durante a transferência."
+    : "Saldo nas duas: você já tem dólar numa e moeda na outra, compra e vende ao mesmo tempo. Sem taxa de saque na hora, mas precisa do dobro de capital e rebalancear de vez em quando.";
+}
+function desenharChips(){
+  const erros = dados ? dados.erros : {};
+  $("#cCorr").innerHTML = Object.keys(NOMES).map(c =>
+    `<button class="chip ${cfgLocal.corretoras.includes(c)?"on":""} ${erros[c]?"err":""}" data-c="${c}" title="${erros[c]?esc("Erro: "+erros[c]):""}">${NOMES[c]}</button>`).join("");
+}
+function desenharTaxas(){
+  $("#fTaxas").innerHTML = Object.keys(NOMES).map(c =>
+    `<label>${NOMES[c]}<input type="number" step="0.01" min="0" class="num" data-taxa="${c}" value="${cfgLocal.taxas[c] ?? 0.1}"></label>`).join("");
+  $("#fSaques").innerHTML = cfgLocal.moedas.map(m =>
+    `<label>${esc(m)}<input type="number" step="any" min="0" class="num" data-saque="${esc(m)}" value="${cfgLocal.saques[m] ?? 0}"></label>`).join("");
+}
+const lerMoedas = () => [...new Set($("#cMoedas").value.split(/[,\s]+/).map(s => s.trim().toUpperCase()).filter(s => /^[A-Z0-9]{1,15}$/.test(s)))].slice(0, 30);
+$("#cModo").addEventListener("click", e => { const b = e.target.closest("button"); if(!b) return; cfgLocal.transferir = b.dataset.v === "1"; desenharModo(); });
+$("#cCorr").addEventListener("click", e => { const b = e.target.closest(".chip"); if(!b) return; const c = b.dataset.c;
+  cfgLocal.corretoras = cfgLocal.corretoras.includes(c) ? cfgLocal.corretoras.filter(x => x !== c) : [...cfgLocal.corretoras, c]; desenharChips(); });
+$("#cMoedas").addEventListener("change", () => { cfgLocal.moedas = lerMoedas(); desenharTaxas(); });
+
+$("#btnSalvar").addEventListener("click", () => {
+  cfgLocal.valor_brl = Math.max(parseFloat($("#cValor").value) || 5000, 10);
+  cfgLocal.minimo = parseFloat($("#cMin").value) || 0;
+  cfgLocal.moedas = lerMoedas().length ? lerMoedas() : clone(PADRAO.moedas);
+  document.querySelectorAll("[data-taxa]").forEach(i => cfgLocal.taxas[i.dataset.taxa] = parseFloat(i.value) || 0);
+  document.querySelectorAll("[data-saque]").forEach(i => cfgLocal.saques[i.dataset.saque] = parseFloat(i.value) || 0);
+  if(cfgLocal.corretoras.length < 2){ $("#salvoTxt").textContent = "Escolha pelo menos duas corretoras."; return; }
+  cfg = clone(cfgLocal); salvarLS("radar_cfg", cfg);
+  seguidas.clear(); ativas.clear(); historico = [];
+  $("#sValor").value = cfg.valor_brl;
+  $("#salvoTxt").textContent = "Aplicado. Atualizando os preços…";
+  atualizar();
+});
+
+// ---------- alertas
+$("#btnAlert").addEventListener("click", async () => {
+  alertas = !alertas;
+  if(alertas && "Notification" in window && Notification.permission === "default"){ try{ await Notification.requestPermission(); }catch(e){} }
+  $("#btnAlert").textContent = alertas ? "Alertas ligados" : "Ativar alertas";
+  $("#btnAlert").classList.toggle("primary", alertas);
+  if(alertas) bip(660);
+});
+let audio;
+function bip(f=880){ try{ audio = audio || new AudioContext(); const o = audio.createOscillator(), g = audio.createGain();
+  o.frequency.value = f; o.connect(g); g.connect(audio.destination); g.gain.setValueAtTime(.15, audio.currentTime);
+  g.gain.exponentialRampToValueAtTime(.001, audio.currentTime + .4); o.start(); o.stop(audio.currentTime + .4); }catch(e){} }
+function avisar(titulo, corpo, f){ if(!alertas) return; bip(f);
+  try{ if("Notification" in window && Notification.permission === "granted") new Notification(titulo, {body: corpo}); }catch(e){} }
+
+// ---------- tela
+function statusOp(o){
+  if(o.suspeito) return ["SUSPEITO","p-susp"];
+  if(ativas.has(chave(o))) return ["ENTRAR","p-entrar"];
+  if(o.liquido >= cfg.minimo) return ["CONFIRMANDO","p-conf"];
+  if(o.liquido > 0) return ["PERTO","p-perto"];
+  return ["NÃO COMPENSA","p-neg"];
+}
+
+function render(){
+  const e = dados;
+  $("#cotVal").textContent = "R$ " + nf(COT, 4);
+  $("#cotFonte").textContent = e.cotacao.fonte;
+  $("#cotFonte").className = e.cotacao.ao_vivo ? "faint" : "warn";
+  $("#dot").classList.add("on");
+  $("#liveTxt").textContent = `ao vivo · atualizado às ${hora(e.t)}`;
+  $("#nCorr").textContent = cfg.corretoras.length;
+  desenharChips();
+
+  // sinal principal
+  const limpas = ops.filter(o => !o.suspeito);
+  const emAberto = limpas.filter(o => ativas.has(chave(o)));
+  let o, cls, tag;
+  if(emAberto.length){ o = emAberto[0]; cls = "entrar"; tag = "ENTRAR"; }
+  else if(limpas[0] && limpas[0].liquido >= cfg.minimo){ o = limpas[0]; cls = "confirmando"; tag = "CONFIRMANDO"; }
+  else { o = limpas[0]; cls = "aguardar"; tag = "AGUARDAR"; }
+  $("#signal").className = "signal " + cls; $("#sigTag").textContent = tag;
+  if(o){
+    if(cls === "aguardar"){
+      $("#sigTxt").textContent = `Nenhuma diferença acima de ${nf(cfg.minimo)}% agora`;
+      $("#sigSub").textContent = `Melhor no momento: ${o.moeda} · comprar na ${NOMES[o.compra]} e vender na ${NOMES[o.venda]}`;
+    }else{
+      $("#sigTxt").innerHTML = `Comprar <b>${esc(o.moeda)}</b> na <b>${NOMES[o.compra]}</b> a <span class="num">R$ ${pxr(o.ask)}</span> → vender na <b>${NOMES[o.venda]}</b> a <span class="num">R$ ${pxr(o.bid)}</span>`;
+      $("#sigSub").textContent = cls === "entrar"
+        ? `Confirmado em ${CONFIRMACOES} leituras seguidas. Saia (venda) assim que a moeda chegar, ou se o líquido ficar negativo.`
+        : `Apareceu agora. Esperando mais uma leitura para confirmar que não é só um piscar de preço.`;
+    }
+    $("#sigVal").textContent = pct(o.liquido);
+    $("#sigVal").className = "n num " + (o.liquido > 0 ? "good" : "bad");
+    $("#sigValSub").textContent = `${rs(o.lucro * COT)} colocando ${brl(cfg.valor_brl)}`;
+  }else{
+    $("#sigTxt").textContent = "Sem preços suficientes para comparar";
+    $("#sigSub").textContent = "Confira se pelo menos duas corretoras estão respondendo.";
+    $("#sigVal").textContent = "—"; $("#sigValSub").textContent = "";
+  }
+
+  // oportunidades
+  const linhas = ops.slice(0, 20);
+  $("#tOps").innerHTML = linhas.length ? linhas.map(o => {
+    const [t, c] = statusOp(o);
+    return `<tr>
+      <td><b>${esc(o.moeda)}</b></td><td>${NOMES[o.compra]}</td><td>${NOMES[o.venda]}</td>
+      <td class="r num">${pxr(o.ask)}</td><td class="r num">${pxr(o.bid)}</td>
+      <td class="r num muted">${pct(o.bruto)}</td>
+      <td class="r num ${o.liquido>0?"good":"bad"}"><b>${pct(o.liquido)}</b></td>
+      <td class="r num ${o.lucro>0?"good":"bad"}">${rs(o.lucro * COT)}</td>
+      <td><span class="pill ${c}">${t}</span></td>
+      <td><button data-sim="${esc(o.moeda)}|${o.compra}|${o.venda}">Simular</button></td></tr>`;
+  }).join("") : `<tr><td colspan="10" class="empty">Sem preços suficientes para comparar.</td></tr>`;
+
+  // preços por corretora
+  const corrs = cfg.corretoras;
+  $("#mHead").innerHTML = `<tr><th>Moeda</th>${corrs.map(c => `<th class="r">${NOMES[c]}${e.erros[c]?' <span class="bad" title="'+esc(e.erros[c])+'">!</span>':""}</th>`).join("")}</tr>`;
+  $("#mBody").innerHTML = cfg.moedas.map(m => {
+    const vals = corrs.map(c => e.precos[c] && e.precos[c][m]);
+    const asks = vals.filter(Boolean).map(v => v.ask), bids = vals.filter(Boolean).map(v => v.bid);
+    const minA = Math.min(...asks), maxB = Math.max(...bids);
+    return `<tr><td><b>${esc(m)}</b></td>${vals.map(v => v ? `<td class="r num"><div class="cell">
+      <span class="${v.ask===minA&&asks.length>1?"best-ask":""}">${pxr(v.ask)}</span>
+      <span class="${v.bid===maxB&&bids.length>1?"best-bid":"muted"}">${pxr(v.bid)}</span></div></td>` : `<td class="r faint">—</td>`).join("")}</tr>`;
+  }).join("");
+  const errs = Object.entries(e.erros);
+  $("#errosTxt").innerHTML = errs.length ? errs.map(([c, msg]) => `<b>${NOMES[c]}</b>: ${esc(msg)}`).join(" · ") : "";
+  $("#errosTxt").hidden = !errs.length;
+
+  desenharLog();
+  desenharGrafico();
+  desenharTracks();
+  preencherSelects();
+}
+
+function desenharLog(){
+  $("#log").innerHTML = eventos.length ? eventos.map(ev =>
+    `<div><span class="h">${hora(ev.t)}</span><span class="${ev.tipo==="entrar"?"good":"warn"}">${esc(ev.texto)}</span></div>`).join("")
+    : `<div class="empty">Nenhum sinal ainda. Quando aparecer uma diferença acima do seu mínimo por ${CONFIRMACOES} leituras seguidas, ela aparece aqui.</div>`;
+}
+
+function preencherSelects(){
+  const encher = (sel, itens, rot) => { const v = sel.value; const novo = itens.map(i => `<option value="${esc(i)}">${esc(rot(i))}</option>`).join("");
+    if(sel.dataset.h !== novo){ sel.innerHTML = novo; sel.dataset.h = novo; if(itens.includes(v)) sel.value = v; } };
+  encher($("#sMoeda"), cfg.moedas, x => x);
+  encher($("#sCompra"), cfg.corretoras, x => NOMES[x]);
+  encher($("#sVenda"), cfg.corretoras, x => NOMES[x]);
+}
+
+function desenharGrafico(){
+  const box = $("#chart"), h = historico, minimo = cfg.minimo;
+  if(h.length < 2){ box.innerHTML = `<div class="empty">Juntando leituras…</div>`; return; }
+  const W = 520, H = 150, pl = 40, pr = 10, pt = 10, pb = 22;
+  const ys = h.map(p => p[1]);
+  let lo = Math.min(...ys, 0, minimo), hi = Math.max(...ys, minimo, 0.05);
+  const pad = (hi - lo) * 0.15 || 0.1; lo -= pad; hi += pad;
+  const t0 = h[0][0], t1 = h[h.length-1][0];
+  const X = t => pl + (t - t0) / ((t1 - t0) || 1) * (W - pl - pr);
+  const Y = v => pt + (hi - v) / (hi - lo) * (H - pt - pb);
+  const pts = h.map(p => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(" ");
+  const area = `${X(t0)},${Y(lo)} ${pts} ${X(t1)},${Y(lo)}`;
+  const ultimo = h[h.length-1];
+  const ticks = [lo + pad, 0, hi - pad].filter((v,i,a) => a.findIndex(x => Math.abs(x - v) < (hi-lo)*0.08) === i);
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Melhor lucro líquido ao longo do tempo">
+    ${ticks.map(v => `<line x1="${pl}" x2="${W-pr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--rule)" stroke-width="1"/><text x="${pl-6}" y="${Y(v)+3}" text-anchor="end">${nf(v,2)}</text>`).join("")}
+    <line x1="${pl}" x2="${W-pr}" y1="${Y(minimo)}" y2="${Y(minimo)}" stroke="var(--good)" stroke-dasharray="4 4" stroke-width="1"/>
+    <text x="${W-pr}" y="${Y(minimo)-4}" text-anchor="end" style="fill:var(--good)">mínimo ${nf(minimo)}%</text>
+    <polygon points="${area}" fill="var(--accent-soft)"/>
+    <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linejoin="round"/>
+    <circle cx="${X(ultimo[0])}" cy="${Y(ultimo[1])}" r="3.5" fill="var(--accent)"/>
+    <text x="${pl}" y="${H-6}">${hora(t0)}</text><text x="${W-pr}" y="${H-6}" text-anchor="end">${hora(t1)}</text>
+  </svg>`;
+}
+
+// ---------- simulador (usa o livro de ofertas de verdade)
+function percorrer(niveis, quantidade, porValor){
+  let resto = quantidade, recebido = 0, gasto = 0;
+  for(const [p, v] of niveis){
+    if(porValor){ const usar = Math.min(resto, p * v); recebido += usar / p; gasto += usar; resto -= usar; }
+    else { const usar = Math.min(resto, v); recebido += usar * p; gasto += usar; resto -= usar; }
+    if(resto <= 1e-12) break;
+  }
+  const medio = porValor ? (recebido ? gasto / recebido : 0) : (gasto ? recebido / gasto : 0);
+  return {recebido, medio, faltou: resto > 1e-9};
+}
+
+document.addEventListener("click", ev => {
+  const b = ev.target.closest("[data-sim]"); if(!b) return;
+  const [m, c, v] = b.dataset.sim.split("|");
+  preencherSelects(); $("#sMoeda").value = m; $("#sCompra").value = c; $("#sVenda").value = v;
+  $("#simCard").scrollIntoView({behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block:"start"});
+  simular();
+});
+$("#btnSim").addEventListener("click", simular);
+
+async function simular(){
+  const m = $("#sMoeda").value, c = $("#sCompra").value, v = $("#sVenda").value;
+  const valorBrl = Math.max(parseFloat($("#sValor").value) || 5000, 10);
+  if(c === v){ $("#simOut").innerHTML = `<div class="note warn">Escolha corretoras diferentes para comprar e vender.</div>`; return; }
+  if(!COT){ $("#simOut").innerHTML = `<div class="note warn">Ainda sem cotação do dólar. Espere a primeira leitura.</div>`; return; }
+  $("#simOut").innerHTML = `<div class="empty">Lendo o livro de ofertas da ${NOMES[c]} e da ${NOMES[v]}…</div>`;
+  try{
+    const [la, lb] = await Promise.all([api(`/api/livro?corretora=${c}&moeda=${encodeURIComponent(m)}`), api(`/api/livro?corretora=${v}&moeda=${encodeURIComponent(m)}`)]);
+    const C = COT, valor = valorBrl / C;
+    const ta = (cfg.taxas[c] ?? 0.1) / 100, tb = (cfg.taxas[v] ?? 0.1) / 100;
+    const compra = percorrer(la.asks, valor, true);
+    const taxaA = compra.recebido * ta;
+    const saque = cfg.transferir ? (+cfg.saques[m] || 0) : 0;
+    const chega = Math.max(compra.recebido - taxaA - saque, 0);
+    const venda = percorrer(lb.bids, chega, false);
+    const taxaB = venda.recebido * tb;
+    const final = venda.recebido - taxaB, lucro = final - valor;
+    const R = n => brl(n * C), P = n => "R$ " + px(n * C);
+    const L = (a, b, cls="") => `<div class="row ${cls}"><span>${a}</span><span class="num">${b}</span></div>`;
+    $("#simOut").innerHTML = `<div class="receipt">
+      <div class="step">1 · Compra na ${NOMES[c]}</div>
+      ${L("Você coloca", brl(valorBrl) + ` <span class="faint">(US$ ${nf(valor)})</span>`)}
+      ${L("Preço médio pago (livro de ofertas)", P(compra.medio))}
+      ${L("Moeda comprada", qt(compra.recebido) + " " + esc(m))}
+      ${L(`Taxa de negociação (${nf(ta*100)}%)`, "− " + qt(taxaA) + " " + esc(m) + ` <span class="faint">(${R(taxaA * compra.medio)})</span>`)}
+      ${cfg.transferir ? `<div class="step">2 · Transferência</div>
+      ${L("Taxa de saque", "− " + qt(saque) + " " + esc(m) + ` <span class="faint">(${R(saque * compra.medio)})</span>`)}` : ""}
+      ${L("Chega para vender", qt(chega) + " " + esc(m))}
+      <div class="step">${cfg.transferir ? 3 : 2} · Venda na ${NOMES[v]}</div>
+      ${L("Preço médio recebido (livro de ofertas)", P(venda.medio))}
+      ${L("Valor da venda", R(venda.recebido))}
+      ${L(`Taxa de negociação (${nf(tb*100)}%)`, "− " + R(taxaB))}
+      ${L("Você tira", R(final), "total")}
+      ${L("Resultado", `<span class="${lucro>0?"good":"bad"}">${rs(lucro * C)} (${pct(lucro / valor * 100)})</span>`, "total")}
+    </div>
+    <div class="faint" style="font-size:12px">Cotação usada: 1 dólar digital (USDT) = R$ ${nf(C, 4)}. Não inclui taxa de depósito ou saque em reais via Pix, se a sua corretora cobrar.</div>
+    ${compra.faltou || venda.faltou ? `<div class="note warn">Não há ofertas suficientes no livro para esse valor inteiro. Diminua o valor.</div>` : ""}
+    ${lucro <= 0 ? `<div class="note">Com as taxas, essa operação não compensa agora.</div>` : ""}
+    ${cfg.transferir ? `<div class="note">O preço de venda é o de agora. Se a transferência demorar, ele pode mudar. Confira se o saque e o depósito de ${esc(m)} estão liberados e na mesma rede nas duas corretoras.</div>` : ""}
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="btnTrack">Acompanhar esta operação</button><span class="faint" style="font-size:12px;align-self:center">Lido às ${hora(la.t)}</span></div>`;
+    $("#btnTrack").addEventListener("click", () => {
+      tracks.unshift({ id: Date.now(), moeda: m, compra: c, venda: v, valor_brl: valorBrl, qtd: chega, taxa: tb * 100, inicio: Date.now()/1000, previsto_brl: lucro * C });
+      salvarLS("radar_tracks", tracks); desenharTracks();
+      $("#btnTrack").textContent = "Acompanhando"; $("#btnTrack").disabled = true;
+    });
+  }catch(e){ $("#simOut").innerHTML = `<div class="note warn">Não consegui ler o livro de ofertas: ${esc(e.message)}. Tente de novo em alguns segundos.</div>`; }
+}
+
+// ---------- operações em andamento (quando sair)
+function desenharTracks(){
+  const box = $("#tracks");
+  if(!tracks.length){ box.innerHTML = `<div class="empty">Depois de simular, clique em “Acompanhar” para o painel dizer quando vender.</div>`; return; }
+  box.innerHTML = tracks.map(t => {
+    const p = dados && dados.precos[t.venda] && dados.precos[t.venda][t.moeda];
+    const agora = p && COT ? t.qtd * p.bid * (1 - t.taxa/100) * COT : null;
+    const lucro = agora != null ? agora - t.valor_brl : null;
+    const lp = lucro != null ? lucro / t.valor_brl * 100 : null;
+    let tag = ["SEM PREÇO","p-neg"], dica = "Sem preço da corretora de venda no momento.";
+    if(lp != null){
+      if(lp >= cfg.minimo){ tag = ["VENDER AGORA","p-entrar"]; dica = `Vendendo agora na ${NOMES[t.venda]} você tira ${brl(agora)}.`; }
+      else if(lp > 0){ tag = ["LUCRO PEQUENO","p-perto"]; dica = `Ainda positivo, mas abaixo do seu mínimo. Vender agora garante ${rs(lucro)}.`; }
+      else { tag = ["NO PREJUÍZO","p-susp"]; dica = `A diferença fechou. Você pode esperar o preço voltar ou vender e aceitar ${rs(lucro)}.`; }
+    }
+    const min = Math.max(0, Math.round((Date.now()/1000 - t.inicio) / 60));
+    return `<div class="track">
+      <div class="t1"><div><b>${esc(t.moeda)}</b> <span class="muted">${NOMES[t.compra]} → ${NOMES[t.venda]}</span></div><span class="pill ${tag[1]}">${tag[0]}</span></div>
+      <div class="t2">
+        <div class="muted">Colocou<b class="num">${brl(t.valor_brl)}</b></div>
+        <div class="muted">Valeria agora<b class="num">${agora!=null?brl(agora):"—"}</b></div>
+        <div class="muted">Resultado<b class="num ${lucro>0?"good":"bad"}">${lucro!=null?rs(lucro):"—"}</b></div>
+      </div>
+      <div class="faint" style="font-size:12px">${dica} · aberta há ${min} min · previsto na entrada: ${rs(t.previsto_brl)}</div>
+      <div><button data-del="${t.id}">Encerrar acompanhamento</button></div>
+    </div>`;
+  }).join("");
+}
+document.addEventListener("click", ev => { const b = ev.target.closest("[data-del]"); if(!b) return;
+  tracks = tracks.filter(t => String(t.id) !== b.dataset.del); salvarLS("radar_tracks", tracks); desenharTracks(); });
+
+$("#btnLimpar").addEventListener("click", () => { eventos = []; salvarLS("radar_eventos", eventos); desenharLog(); });
+
+// ---------- leitura periódica
+let lendo = false;
+async function atualizar(){
+  if(lendo) return; lendo = true;
+  try{
+    const q = `moedas=${encodeURIComponent(cfg.moedas.join(","))}&corretoras=${encodeURIComponent(cfg.corretoras.join(","))}`;
+    dados = await api(`/api/precos?${q}`);
+    COT = dados.cotacao.valor;
+    ultimaOk = Date.now();
+    processar();
+    render();
+    if(primeiro){ primeiro = false; }
+  }catch(e){
+    if(Date.now() - ultimaOk > INTERVALO_MS * 3){
+      $("#dot").classList.remove("on");
+      $("#liveTxt").textContent = "sem resposta do servidor, tentando de novo…";
+    }
+  }finally{ lendo = false; }
+}
+montarControles();
+desenharLog();
+desenharTracks();
+atualizar();
+setInterval(atualizar, INTERVALO_MS);
+</script>
+</body>
+</html>

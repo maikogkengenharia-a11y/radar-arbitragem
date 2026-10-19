@@ -2,643 +2,1033 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Radar de Arbitragem</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Mesa de Arbitragem</title>
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap">
 <style>
-/* Layout: mesa de operação — faixa de sinal no topo, depois controles, oportunidades, simulador e acompanhamento */
+/* Layout: mesa de operação escura — barra lateral fixa, faixa de saldos, seções numeradas 01–07 */
 :root{
-  --bg:#0e1215; --panel:#151b20; --panel2:#1b2228; --line:#26303700; --rule:#26303a;
-  --fg:#e3e8eb; --muted:#8693a0; --faint:#56626d;
-  --accent:#4d8dff; --accent-soft:#4d8dff22;
-  --good:#38c48a; --good-soft:#38c48a1f; --bad:#ee6a5f; --bad-soft:#ee6a5f1f;
-  --warn:#f0b54a; --warn-soft:#f0b54a1f;
+  --bg:#0b0b0c; --bg2:#111113; --panel:#141416; --panel2:#1a1a1d; --rule:#25252a; --rule2:#303036;
+  --fg:#ececee; --muted:#8c8c95; --faint:#5a5a63;
+  --accent:#ff6b1f; --accent-soft:#ff6b1f22; --accent-line:#ff6b1f66;
+  --good:#2fd17c; --good-soft:#2fd17c1c; --bad:#ff5a5a; --bad-soft:#ff5a5a1c; --warn:#f2b441; --warn-soft:#f2b4411c;
   --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Consolas,monospace;
+  --serif:"Instrument Serif",Georgia,"Times New Roman",serif;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
-html,body{margin:0}
-body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--sans);padding:20px 16px 48px}
-.wrap{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
-h1{font-size:20px;margin:0;letter-spacing:-.01em;font-weight:700}
-h2{font-size:13px;margin:0;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
-.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
-.muted{color:var(--muted)} .faint{color:var(--faint)}
-.good{color:var(--good)} .bad{color:var(--bad)} .warn{color:var(--warn)}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--sans)}
 button,input,select{font:inherit;color:inherit}
-button{cursor:pointer;border:1px solid var(--rule);background:var(--panel2);border-radius:8px;padding:7px 12px}
-button:hover{border-color:var(--accent)}
-button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
-input,select{background:var(--bg);border:1px solid var(--rule);border-radius:8px;padding:7px 10px;min-width:0}
-label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+button{cursor:pointer;background:var(--panel2);border:1px solid var(--rule2);border-radius:8px;padding:7px 12px}
+button:hover:not(:disabled){border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input,select{background:var(--bg);border:1px solid var(--rule2);border-radius:8px;padding:8px 10px;min-width:0}
+a{color:var(--accent)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)} .faint{color:var(--faint)} .good{color:var(--good)} .bad{color:var(--bad)} .warn{color:var(--warn)} .acc{color:var(--accent)}
+.eyebrow{font:500 10.5px/1.2 var(--mono);text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}
 
-header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
-.live{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
-.dot{width:9px;height:9px;border-radius:50%;background:var(--faint)}
-.dot.on{background:var(--good);box-shadow:0 0 0 0 var(--good);animation:pulse 2s infinite}
-@keyframes pulse{0%{box-shadow:0 0 0 0 #38c48a66}70%{box-shadow:0 0 0 8px #38c48a00}100%{box-shadow:0 0 0 0 #38c48a00}}
-@media (prefers-reduced-motion:reduce){.dot.on{animation:none}}
+.app{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:100%}
+.side{position:sticky;top:0;height:100vh;border-right:1px solid var(--rule);background:var(--bg2);display:flex;flex-direction:column;padding:18px 12px;gap:4px}
+.brand{display:flex;align-items:center;gap:10px;padding:2px 8px 18px;font-weight:700;letter-spacing:-.01em}
+.brand i{width:26px;height:26px;border-radius:7px;background:var(--accent);display:grid;place-items:center;color:#160700;font:700 13px var(--mono);font-style:normal}
+.nav a{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;color:var(--muted);text-decoration:none;font-size:14px}
+.nav a .n{font:500 11px var(--mono);color:var(--faint);width:18px}
+.nav a:hover{color:var(--fg);background:var(--panel)}
+.nav a.on{color:var(--fg);background:var(--panel2)}
+.nav a.on .n{color:var(--accent)}
+.badge{margin-left:auto;background:var(--accent);color:#160700;font:700 10px var(--mono);border-radius:999px;padding:1px 6px}
+.side .foot{margin-top:auto;display:flex;flex-direction:column;gap:8px;padding:8px}
+.simtag{font:600 10.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--warn);border:1px solid var(--warn);border-radius:6px;padding:5px 8px;text-align:center}
 
-.signal{border-radius:14px;padding:18px 20px;display:grid;grid-template-columns:auto 1fr auto;gap:18px;align-items:center;border:1px solid var(--rule);background:var(--panel)}
-.signal .tag{justify-self:start;font-weight:700;font-size:13px;letter-spacing:.1em;padding:8px 14px;border-radius:999px;white-space:nowrap}
-.signal.entrar{border-color:var(--good);background:linear-gradient(90deg,var(--good-soft),transparent 70%)}
-.signal.entrar .tag{background:var(--good);color:#06150e}
-.signal.confirmando{border-color:var(--warn)}
-.signal.confirmando .tag{background:var(--warn);color:#1d1404}
-.signal.aguardar .tag{background:var(--panel2);color:var(--muted);border:1px solid var(--rule)}
-.signal .big{font-size:18px;font-weight:600}
-.signal .sub{color:var(--muted);font-size:13px;margin-top:2px}
-.signal .val{text-align:right}
-.signal .val .n{font-size:26px;font-weight:600}
-@media (max-width:720px){.signal{grid-template-columns:1fr}.signal .val{text-align:left}}
+main{min-width:0;padding:22px max(16px,env(safe-area-inset-right,0px)) 60px max(16px,env(safe-area-inset-left,0px))}
+.wrap{max-width:1360px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.top h1{margin:0;font:400 34px/1.1 var(--serif);letter-spacing:-.01em}
+.top .sub{color:var(--muted);font-size:13px}
+.status{display:flex;align-items:center;gap:10px;font:500 12px var(--mono);color:var(--muted)}
+.pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--rule2);border-radius:999px;padding:4px 10px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--faint)}
+.dot.on{background:var(--good);box-shadow:0 0 0 3px var(--good-soft)}
 
-.card{background:var(--panel);border:1px solid var(--rule);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
-.card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.strip{display:flex;border:1px solid var(--rule);border-radius:12px;background:var(--panel);overflow-x:auto}
+.strip>div{padding:10px 14px;border-right:1px solid var(--rule);min-width:140px;flex:1 0 auto}
+.strip>div:last-child{border-right:0}
+.strip .v{font:500 13px var(--mono);margin-top:3px;white-space:nowrap}
+.strip .v2{font:12px var(--mono);color:var(--muted);white-space:nowrap}
+.strip .tot{background:var(--panel2)}
+.toprota{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font:500 12px var(--mono);color:var(--muted)}
+.toprota b{color:var(--fg)}
 
-.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;align-items:end}
-.seg{display:flex;border:1px solid var(--rule);border-radius:8px;overflow:hidden}
-.seg button{border:0;border-radius:0;flex:1;background:transparent;padding:7px 8px;font-size:13px}
-.seg button.on{background:var(--accent-soft);color:var(--fg);box-shadow:inset 0 -2px 0 var(--accent)}
+.pg{display:none;flex-direction:column;gap:16px}
+.pg.on{display:flex}
+.h2{display:flex;align-items:baseline;gap:14px;margin:6px 0 2px}
+.h2 .idx{font:300 40px/1 var(--mono);color:var(--faint)}
+.h2 h2{margin:0;font:400 30px/1 var(--serif)}
+.h2 h2 em{color:var(--accent)}
+.h2 .eyebrow{margin-left:4px}
+
+.card{background:var(--panel);border:1px solid var(--rule);border-radius:14px;padding:16px;min-width:0}
+.grid{display:grid;gap:12px}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:1100px){.g4{grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:620px){.g4,.g3,.g2{grid-template-columns:minmax(0,1fr)}}
+
+.kpi .big{font:500 26px/1.15 var(--mono);margin-top:8px;letter-spacing:-.02em}
+.kpi .s{font-size:12px;color:var(--muted);margin-top:4px}
+.kpi.ask{border-color:var(--accent-line)} .kpi.ask .big{color:var(--accent)}
+.kpi.bid{border-color:#2fd17c55} .kpi.bid .big{color:var(--good)}
+
+.exs{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.ex{position:relative;display:flex;flex-direction:column;gap:10px}
+.ex.buy{border-color:var(--accent-line)} .ex.sell{border-color:#2fd17c66}
+.ex .hd{display:flex;align-items:center;gap:10px}
+.logo{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font:700 11px var(--mono);color:#0b0b0c;flex:none}
+.ex .nm{font-weight:600}
+.ex .tag{position:absolute;top:-1px;right:14px;font:700 10px var(--mono);letter-spacing:.1em;padding:3px 8px;border-radius:0 0 6px 6px}
+.ex.buy .tag{background:var(--accent);color:#160700}
+.ex.sell .tag{background:var(--good);color:#04160b}
+.ex .px{font:500 28px/1 var(--mono);letter-spacing:-.02em}
+.ex .ab{display:flex;justify-content:space-between;font:500 12px var(--mono)}
+.ex .ab span{display:flex;flex-direction:column;gap:2px}
+.ex .ab small{font:500 10px var(--mono);color:var(--faint);letter-spacing:.1em}
+.ex .bal{display:flex;justify-content:space-between;font:12px var(--mono);color:var(--muted);border-top:1px dashed var(--rule2);padding-top:8px}
+.ex .err{color:var(--bad);font-size:12px}
+.spark{height:44px;width:100%}
+.book{display:grid;grid-template-columns:1fr 1fr;gap:6px;font:11.5px var(--mono)}
+.book div{display:flex;justify-content:space-between;padding:2px 6px;border-radius:4px}
+.book .a{background:var(--bad-soft)} .book .b{background:var(--good-soft)}
+.lnk{background:none;border:0;padding:0;color:var(--muted);font:12px var(--mono);text-align:left}
+.lnk:hover{color:var(--fg)}
+
+.ops{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.op{display:flex;flex-direction:column;gap:10px}
+.op .rt{font:500 12.5px var(--mono);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.op .val{font:500 30px/1 var(--mono);letter-spacing:-.02em}
+.op .pc{font:500 13px var(--mono);margin-left:6px}
+.op .mt{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font:12px var(--mono)}
+.op .mt small{display:block;font:500 10px var(--mono);color:var(--faint);letter-spacing:.08em;text-transform:uppercase}
+.op .why{font-size:12px;color:var(--muted);min-height:18px}
+.go{background:var(--accent);border-color:var(--accent);color:#160700;font:700 12px var(--mono);letter-spacing:.12em;padding:11px;border-radius:9px;text-transform:uppercase}
+.go:hover:not(:disabled){filter:brightness(1.1)}
+.st{font:600 10.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;display:inline-flex;align-items:center;gap:6px}
+.st.ok{color:var(--good)} .st.no{color:var(--faint)} .st.sal{color:var(--warn)}
+.st::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+
 .chips{display:flex;flex-wrap:wrap;gap:6px}
-.chip{border-radius:999px;padding:5px 12px;font-size:13px;display:flex;align-items:center;gap:6px}
-.chip::before{content:"";width:7px;height:7px;transform:rotate(45deg);background:var(--faint)}
-.chip.on{border-color:var(--accent);background:var(--accent-soft)}
-.chip.on::before{background:var(--accent)}
-.chip.err::after{content:"!";color:var(--bad);font-weight:700}
-details summary{cursor:pointer;color:var(--muted);font-size:13px}
-.fees{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:10px}
+.chip{border-radius:999px;padding:5px 12px;font:500 12px var(--mono)}
+.chip.on{border-color:var(--good);background:var(--good-soft);color:var(--good)}
+.chip.acc.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+label.f{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted)}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.toggle{width:54px;height:30px;border-radius:999px;border:1px solid var(--rule2);background:var(--panel2);position:relative;padding:0}
+.toggle::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--muted);transition:left .15s}
+.toggle.on{background:var(--good);border-color:var(--good)}
+.toggle.on::after{left:27px;background:#04160b}
+.auto-card{border-color:#2fd17c44;background:linear-gradient(180deg,#2fd17c0c,transparent 60%),var(--panel)}
+.log{max-height:300px;overflow:auto;display:flex;flex-direction:column;font:12px var(--mono)}
+.log div{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--rule)}
+.log .h{color:var(--faint);flex:none}
+.banner{font-size:12.5px;border-radius:10px;padding:10px 12px;background:var(--warn-soft);color:var(--warn)}
+.banner.info{background:var(--panel2);color:var(--muted)}
 
-.scroll{overflow-x:auto;margin:0 -16px;padding:0 16px}
+.scroll{overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:13px}
-th{text-align:left;font-weight:500;color:var(--muted);font-size:12px;padding:6px 10px;border-bottom:1px solid var(--rule);white-space:nowrap}
-td{padding:8px 10px;border-bottom:1px solid var(--rule);white-space:nowrap}
-tr:last-child td{border-bottom:0}
+th{text-align:left;font:500 10.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--rule);white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid var(--rule);white-space:nowrap}
 td.r,th.r{text-align:right}
-tbody tr:hover{background:var(--panel2)}
-.pill{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;padding:3px 8px;border-radius:999px}
-.p-entrar{background:var(--good);color:#06150e}
-.p-conf{background:var(--warn-soft);color:var(--warn)}
-.p-perto{background:var(--accent-soft);color:var(--accent)}
-.p-neg{background:transparent;color:var(--faint);border:1px solid var(--rule)}
-.p-susp{background:var(--bad-soft);color:var(--bad)}
-.mtx td{font-size:12px}
-.mtx .cell{display:flex;flex-direction:column;line-height:1.3}
-.best-ask{color:var(--good);font-weight:600}
-.best-bid{color:var(--accent);font-weight:600}
-.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);flex-wrap:wrap}
-
-.grid2{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:16px}
-@media (max-width:900px){.grid2{grid-template-columns:1fr}}
-
-.receipt{display:flex;flex-direction:column;gap:0;font-size:13px}
-.receipt .row{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px dashed var(--rule)}
-.receipt .row span:first-child{color:var(--muted)}
-.receipt .step{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);padding:12px 0 2px;font-weight:600}
-.receipt .total{border-bottom:0;padding-top:12px;font-size:16px;font-weight:600}
-.receipt .total span:first-child{color:var(--fg)}
-.note{font-size:12px;color:var(--muted);background:var(--panel2);border-radius:8px;padding:10px 12px}
-.note.warn{color:var(--warn);background:var(--warn-soft)}
-.empty{color:var(--faint);font-size:13px;padding:14px 0}
-
-.track{border:1px solid var(--rule);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px}
-.track .t1{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center}
-.track .t2{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:12px}
-.track .t2 b{display:block;font-size:14px;font-weight:600}
-
-.log{max-height:280px;overflow:auto;display:flex;flex-direction:column;font-size:13px}
-.log div{padding:6px 0;border-bottom:1px solid var(--rule);display:flex;gap:10px}
-.log .h{color:var(--faint);font-family:var(--mono);flex:none}
+.tg{font:600 10px var(--mono);letter-spacing:.08em;padding:2px 7px;border-radius:999px;border:1px solid var(--rule2)}
+.tg.ok{color:var(--good);border-color:#2fd17c55} .tg.auto{color:#a99bff;border-color:#a99bff55} .tg.bad{color:var(--bad);border-color:#ff5a5a55}
+.per{display:flex;gap:6px}
+.per button{font:500 11px var(--mono);padding:4px 10px}
+.per button.on{background:var(--accent);border-color:var(--accent);color:#160700}
 svg text{fill:var(--muted);font:10px var(--mono)}
-.cot{font-size:13px;border:1px solid var(--rule);border-radius:999px;padding:5px 12px;display:flex;gap:6px;align-items:baseline;flex-wrap:wrap}
-footer{font-size:12px;color:var(--faint);line-height:1.6}
+.rank div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:10px 0;border-bottom:1px solid var(--rule);font:12.5px var(--mono)}
+.rank .bar{grid-column:1/-1;height:4px;border-radius:2px;background:var(--rule)}
+.rank .bar i{display:block;height:100%;border-radius:2px;background:var(--good)}
+.tax{border-color:#ff5a5a44}
+.fees{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.fees .fx{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--panel2);border-radius:10px;padding:10px}
+.fees .fx b{grid-column:1/-1;font-size:13px}
+.fees .fx label{font-size:11px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.fees .fx .chk{grid-column:1/-1;flex-direction:row;align-items:center;gap:6px}
+.guide{max-width:760px;line-height:1.65}
+.guide h3{margin:22px 0 6px;font:400 22px var(--serif)}
+.guide p,.guide li{color:#c9c9cf}
+
+.modal{position:fixed;inset:0;background:#000a;backdrop-filter:blur(4px);display:grid;place-items:center;padding:16px;z-index:50}
+.modal[hidden]{display:none!important}
+.box{width:min(520px,100%);max-height:92vh;overflow:auto;background:var(--panel);border:1px solid var(--rule2);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:14px}
+.box h3{margin:0;font:400 26px/1.1 var(--serif)}
+.kv{display:flex;justify-content:space-between;gap:12px;font:13px var(--mono);padding:4px 0}
+.kv span:first-child{color:var(--muted);font-family:var(--sans)}
+.steps{display:flex;flex-direction:column;gap:0}
+.step{display:grid;grid-template-columns:22px 1fr;gap:10px;padding:6px 0}
+.step .ic{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--rule2);display:grid;place-items:center;font:700 11px var(--mono);margin-top:1px}
+.step.done .ic{background:var(--good);border-color:var(--good);color:#04160b}
+.step.run .ic{border-color:var(--accent);border-top-color:transparent;animation:spin .8s linear infinite}
+.step.fail .ic{background:var(--bad);border-color:var(--bad);color:#160404}
+.step .tt{font:600 10.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.step.done .tt{color:var(--good)} .step.run .tt{color:var(--accent)} .step.fail .tt{color:var(--bad)}
+.step .ds{font-size:12.5px;color:#c9c9cf}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.step.run .ic{animation:none}}
+.timer{font:600 13px var(--mono);background:var(--accent);color:#160700;border-radius:6px;padding:2px 8px}
+.result{border:1px solid var(--good);background:var(--good-soft);border-radius:12px;padding:12px}
+.result.neg{border-color:var(--bad);background:var(--bad-soft)}
+.toasts{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:max(16px,env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:8px;z-index:60;max-width:min(380px,calc(100vw - 32px))}
+.toast{background:var(--panel2);border:1px solid var(--rule2);border-left:3px solid var(--good);border-radius:10px;padding:10px 12px;font-size:13px}
+.toast.bad{border-left-color:var(--bad)} .toast.acc{border-left-color:var(--accent)}
+.empty{color:var(--faint);font-size:13px;padding:18px 0;text-align:center}
+
+@media (max-width:860px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .side{position:sticky;top:0;height:auto;z-index:20;flex-direction:row;align-items:center;padding:8px max(12px,env(safe-area-inset-left,0px));border-right:0;border-bottom:1px solid var(--rule);overflow-x:auto;gap:2px}
+  .brand{padding:0 10px 0 0}
+  .brand span{display:none}
+  .nav{display:flex;gap:2px}
+  .nav a{white-space:nowrap;padding:7px 9px;font-size:13px}
+  .nav a .n{display:none}
+  .side .foot{display:none}
+  .top h1{font-size:28px}
+}
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="app">
+  <aside class="side">
+    <div class="brand"><i>M</i><span>mesa de arbitragem</span></div>
+    <nav class="nav" id="nav">
+      <a href="#cotacoes" data-pg="cotacoes"><span class="n">01</span>Cotações</a>
+      <a href="#oportunidades" data-pg="oportunidades"><span class="n">02</span>Oportunidades<span class="badge" id="nOps" hidden>0</span></a>
+      <a href="#autobot" data-pg="autobot"><span class="n">03</span>Autobot</a>
+      <a href="#performance" data-pg="performance"><span class="n">04</span>Performance</a>
+      <a href="#historico" data-pg="historico"><span class="n">05</span>Histórico</a>
+      <a href="#impostos" data-pg="impostos"><span class="n">06</span>Impostos</a>
+      <a href="#config" data-pg="config"><span class="n">07</span>Configurações</a>
+      <a href="#guia" data-pg="guia"><span class="n">08</span>Guia</a>
+    </nav>
+    <div class="foot">
+      <div class="simtag">Modo simulador</div>
+      <a href="/radar.html" class="muted" style="font-size:12px;text-decoration:none">Radar de moedas →</a>
+    </div>
+  </aside>
 
-<header>
-  <div>
-    <h1>Radar de Arbitragem</h1>
-    <div class="muted" style="font-size:13px">Preços ao vivo em <span id="nCorr">9</span> corretoras · valores em reais · tudo já descontando taxas</div>
-  </div>
-  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-    <div class="cot"><span class="muted">Dólar hoje</span> <b class="num" id="cotVal">—</b> <span class="faint" id="cotFonte"></span></div>
-    <div class="live"><span class="dot" id="dot"></span><span id="liveTxt">conectando…</span></div>
-    <button id="btnAlert">Ativar alertas</button>
-  </div>
-</header>
-
-<section class="signal aguardar" id="signal">
-  <span class="tag" id="sigTag">AGUARDAR</span>
-  <div><div class="big" id="sigTxt">Lendo preços…</div><div class="sub" id="sigSub"></div></div>
-  <div class="val"><div class="n num" id="sigVal">—</div><div class="sub" id="sigValSub"></div></div>
-</section>
-
-<section class="card">
-  <div class="controls">
-    <label>Valor que você coloca (R$)
-      <input id="cValor" type="number" min="10" step="100" class="num">
-    </label>
-    <label>Lucro mínimo para entrar (%)
-      <input id="cMin" type="number" step="0.05" class="num">
-    </label>
-    <label>Como você opera
-      <div class="seg" id="cModo">
-        <button data-v="1">Transferindo</button>
-        <button data-v="0">Saldo nas duas</button>
+  <main><div class="wrap">
+    <header class="top">
+      <div>
+        <h1 id="saud">Olá.</h1>
+        <div class="sub">USDT/BRL entre corretoras · preços reais ao vivo · dinheiro virtual</div>
       </div>
-    </label>
-    <label style="grid-column:span 2;min-width:0">Moedas (separadas por vírgula)
-      <input id="cMoedas" class="num">
-    </label>
-  </div>
-  <div class="chips" id="cCorr"></div>
-  <div class="faint" style="font-size:12px" id="modoExpl"></div>
-  <details>
-    <summary>Ajustar taxas de cada corretora e taxas de saque</summary>
-    <div style="margin-top:10px;font-size:12px" class="muted">Taxa de negociação (%) — use a da sua conta. Desconto com token da corretora ou nível VIP diminui.</div>
-    <div class="fees" id="fTaxas"></div>
-    <div style="margin-top:14px;font-size:12px" class="muted">Taxa de saque (em unidades da moeda, rede mais barata). Valores aproximados: confira na tela de saque antes de operar.</div>
-    <div class="fees" id="fSaques"></div>
-  </details>
-  <div><button class="primary" id="btnSalvar">Aplicar</button> <span class="muted" id="salvoTxt" style="font-size:12px;margin-left:8px"></span></div>
-</section>
+      <div class="status">
+        <span class="pill"><span class="dot" id="dot"></span><span id="conn">conectando</span></span>
+        <span class="pill num" id="relogio">--:--:--</span>
+      </div>
+    </header>
 
-<section class="card">
-  <div class="card-head">
-    <h2>Oportunidades agora</h2>
-    <div class="legend">
-      <span><span class="pill p-entrar">ENTRAR</span> confirmado</span>
-      <span><span class="pill p-conf">CONFIRMANDO</span> 1ª leitura</span>
-      <span><span class="pill p-perto">PERTO</span> positivo</span>
-      <span><span class="pill p-susp">SUSPEITO</span> diferença alta demais</span>
-    </div>
-  </div>
-  <div class="scroll"><table>
-    <thead><tr><th>Moeda</th><th>Comprar em</th><th>Vender em</th><th class="r">Preço compra (R$)</th><th class="r">Preço venda (R$)</th><th class="r">Diferença</th><th class="r">Líquido</th><th class="r">Resultado</th><th>Sinal</th><th></th></tr></thead>
-    <tbody id="tOps"></tbody>
-  </table></div>
-  <div class="faint" style="font-size:12px">Calculado com o melhor preço do livro e o valor informado. Para valores maiores, use “Simular”: ele percorre o livro de ofertas e mostra o preço médio real.</div>
-</section>
+    <div class="strip" id="strip"></div>
+    <div class="toprota" id="toprota"></div>
 
-<div class="grid2">
-  <section class="card" id="simCard">
-    <div class="card-head"><h2>Simulador: quanto entra, quanto sai</h2></div>
-    <div class="controls">
-      <label>Moeda<select id="sMoeda" class="num"></select></label>
-      <label>Comprar em<select id="sCompra"></select></label>
-      <label>Vender em<select id="sVenda"></select></label>
-      <label>Valor (R$)<input id="sValor" type="number" min="10" step="100" class="num"></label>
-    </div>
-    <div><button class="primary" id="btnSim">Calcular com o livro de ofertas</button></div>
-    <div id="simOut"><div class="empty">Escolha uma oportunidade na tabela ou monte a sua aqui.</div></div>
-  </section>
-
-  <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
-    <section class="card">
-      <div class="card-head"><h2>Operações em andamento</h2></div>
-      <div id="tracks"><div class="empty">Depois de simular, clique em “Acompanhar” para o painel dizer quando vender.</div></div>
+    <!-- 01 COTAÇÕES -->
+    <section class="pg" id="pg-cotacoes">
+      <div class="h2"><span class="idx">01</span><h2>usdt/brl <em>pulse</em></h2><span class="eyebrow">ao vivo · atualiza a cada 4 s</span></div>
+      <div class="grid g4">
+        <div class="card kpi"><div class="eyebrow">Média entre corretoras</div><div class="big" id="kMed">—</div><div class="s" id="kMedS"></div></div>
+        <div class="card kpi ask"><div class="eyebrow">Menor preço · comprar</div><div class="big" id="kAsk">—</div><div class="s" id="kAskS"></div></div>
+        <div class="card kpi bid"><div class="eyebrow">Maior preço · vender</div><div class="big" id="kBid">—</div><div class="s" id="kBidS"></div></div>
+        <div class="card kpi"><div class="eyebrow">Diferença bruta</div><div class="big" id="kSpr">—</div><div class="s">antes das taxas</div></div>
+      </div>
+      <div class="eyebrow" style="color:var(--accent)">Corretoras</div>
+      <div class="exs" id="exs"></div>
     </section>
-    <section class="card">
-      <div class="card-head"><h2>Melhor oportunidade nos últimos minutos</h2><span class="faint" style="font-size:12px">% líquido</span></div>
-      <div id="chart"></div>
+
+    <!-- 02 OPORTUNIDADES -->
+    <section class="pg" id="pg-oportunidades">
+      <div class="h2"><span class="idx">02</span><h2><em>oportunidades</em></h2><span class="eyebrow" id="opsSub"></span></div>
+      <div class="row">
+        <label class="f">Valor por operação (R$)<input id="opValor" type="number" min="50" step="100" class="num" style="width:150px"></label>
+        <label class="f">Mostrar<select id="opFiltro"><option value="todas">todas as rotas</option><option value="viaveis">só as viáveis</option></select></label>
+        <div class="banner info" style="flex:1;min-width:240px">Lucro já descontando taxa de compra, taxa de saque do USDT e taxa de venda, usando as ofertas reais do livro de cada corretora.</div>
+      </div>
+      <div class="ops" id="ops"></div>
     </section>
+
+    <!-- 03 AUTOBOT -->
+    <section class="pg" id="pg-autobot">
+      <div class="h2"><span class="idx">03</span><h2>modo <em>autônomo</em></h2></div>
+      <div class="card auto-card" style="display:flex;flex-direction:column;gap:16px">
+        <div class="row" style="justify-content:space-between">
+          <div><div class="eyebrow" style="color:var(--good)">Execução automática</div><div style="font-size:20px;font-weight:600">deixar o robô caçar diferenças</div><div class="muted" style="font-size:13px">opera sozinho quando o lucro líquido passa do mínimo que você escolher</div></div>
+          <div class="row"><span class="eyebrow" id="autoSt">desligado</span><button class="toggle" id="autoTg" aria-label="Ligar ou desligar o robô"></button></div>
+        </div>
+        <div class="grid g2">
+          <div style="display:flex;flex-direction:column;gap:8px"><div class="eyebrow">Corretoras ativas</div><div class="chips" id="autoEx"></div></div>
+          <div style="display:flex;flex-direction:column;gap:8px"><div class="eyebrow">Lucro líquido mínimo</div><div class="chips" id="autoMin"></div></div>
+          <label class="f"><span class="eyebrow">Valor máximo por operação (R$)</span><input id="autoMax" type="number" min="50" step="100" class="num"></label>
+          <div style="display:flex;flex-direction:column;gap:8px"><div class="eyebrow">Intervalo entre operações</div><div class="chips" id="autoInt"></div></div>
+        </div>
+        <div class="row" style="justify-content:space-between">
+          <div class="banner" style="flex:1;min-width:240px">O robô só roda com esta página aberta. Se fechar a aba, ele para. Tudo aqui é simulado: nenhum dinheiro de verdade é movido.</div>
+          <button class="go" id="autoSalvar" style="background:var(--good);border-color:var(--good);color:#04160b">Salvar</button>
+        </div>
+        <div class="grid g2">
+          <div class="card" style="background:var(--bg2)"><div class="eyebrow">Última operação automática</div><div class="num" style="font-size:20px;margin-top:6px" id="autoUlt">—</div></div>
+          <div class="card" style="background:var(--bg2)"><div class="eyebrow">Operações automáticas hoje</div><div class="num" style="font-size:20px;margin-top:6px" id="autoHoje">0</div></div>
+        </div>
+        <div class="card" style="background:var(--bg2)">
+          <div class="row" style="justify-content:space-between"><div class="eyebrow">Atividade em tempo real</div><button class="lnk" id="autoLimpar">limpar</button></div>
+          <div class="log" id="autoLog"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 04 PERFORMANCE -->
+    <section class="pg" id="pg-performance">
+      <div class="row" style="justify-content:space-between">
+        <div class="h2"><span class="idx">04</span><h2>sua <em>performance</em></h2></div>
+        <div class="per" id="per"><button data-p="1">24H</button><button data-p="7">7D</button><button data-p="30">30D</button><button data-p="0" class="on">TUDO</button></div>
+      </div>
+      <div class="grid g3" id="kpis"></div>
+      <div class="grid g2">
+        <div class="card"><div class="eyebrow">Lucro acumulado</div><div id="chPnl"></div></div>
+        <div class="card"><div class="eyebrow">Volume operado por dia</div><div id="chVol"></div></div>
+      </div>
+      <div class="card"><div class="eyebrow">Desempenho por rota</div><div class="rank" id="rank"></div></div>
+    </section>
+
+    <!-- 05 HISTÓRICO -->
+    <section class="pg" id="pg-historico">
+      <div class="row" style="justify-content:space-between">
+        <div class="h2"><span class="idx">05</span><h2>seu <em>histórico</em></h2></div>
+        <div class="row"><span class="eyebrow" id="hCount"></span><button id="hCsv">Exportar CSV</button></div>
+      </div>
+      <div class="card scroll"><table>
+        <thead><tr><th>Data · hora</th><th>Rota</th><th class="r">Valor</th><th class="r">USDT</th><th class="r">Compra</th><th class="r">Venda</th><th class="r">Lucro</th><th class="r">%</th><th>Status</th></tr></thead>
+        <tbody id="hBody"></tbody>
+      </table></div>
+      <div class="row" style="justify-content:flex-end"><button id="hPrev">← anterior</button><span class="num muted" id="hPag"></span><button id="hNext">próxima →</button></div>
+    </section>
+
+    <!-- 06 IMPOSTOS -->
+    <section class="pg" id="pg-impostos">
+      <div class="row" style="justify-content:space-between">
+        <div class="h2"><span class="idx">06</span><h2>seus <em>impostos</em></h2></div>
+        <select id="tMes"></select>
+      </div>
+      <div class="grid g3" id="tax"></div>
+      <div class="banner info">Estimativa para orientação, com base nas regras divulgadas para 2026: em corretoras nacionais, vendas de até R$ 35 mil no mês são isentas e o ganho acima disso paga a partir de 15%. Em corretoras do exterior não há isenção: o ganho paga 15% e é apurado na declaração anual (Lei 14.754/2023). Quais corretoras contam como nacionais você escolhe em Configurações. Confirme com um contador antes de pagar ou declarar.</div>
+    </section>
+
+    <!-- 07 CONFIG -->
+    <section class="pg" id="pg-config">
+      <div class="h2"><span class="idx">07</span><h2><em>configurações</em></h2></div>
+      <div class="card" style="display:flex;flex-direction:column;gap:14px">
+        <div class="eyebrow">Operação</div>
+        <div class="grid g4">
+          <label class="f">Valor padrão por operação (R$)<input id="cfValor" type="number" min="50" step="100" class="num"></label>
+          <label class="f">Lucro mínimo para "viável" (%)<input id="cfMin" type="number" step="0.05" class="num"></label>
+          <label class="f">Como você opera<select id="cfModo"><option value="transferir">Transferindo USDT entre corretoras</option><option value="instantaneo">Saldo nas duas (sem esperar transferência)</option></select></label>
+          <label class="f">Tempo da transferência (min)<input id="cfTempo" type="number" min="0" max="60" step="1" class="num"></label>
+        </div>
+        <label class="f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="cfAcelerar"> Acelerar a simulação (a transferência leva 10 segundos em vez do tempo real)</label>
+      </div>
+      <div class="card" style="display:flex;flex-direction:column;gap:12px">
+        <div class="eyebrow">Corretoras, taxas e saque do USDT</div>
+        <div class="muted" style="font-size:12.5px">Taxa de negociação a mercado (%) e taxa de saque do USDT (rede mais barata). Valores iniciais são estimativas: confira na sua conta, porque fazem toda a diferença no lucro.</div>
+        <div class="fees" id="cfEx"></div>
+      </div>
+      <div class="card" style="display:flex;flex-direction:column;gap:12px">
+        <div class="eyebrow">Saldos do simulador</div>
+        <div class="grid g4">
+          <label class="f">Reais iniciais em cada corretora (R$)<input id="cfIniBrl" type="number" min="0" step="1000" class="num"></label>
+          <label class="f">USDT inicial em cada corretora<input id="cfIniUsdt" type="number" min="0" step="100" class="num"></label>
+        </div>
+        <div class="row"><button class="go" id="cfSalvar">Salvar configurações</button><button id="cfReset">Zerar simulador</button><span class="muted" id="cfMsg" style="font-size:12px"></span></div>
+      </div>
+    </section>
+
+    <!-- 08 GUIA -->
+    <section class="pg" id="pg-guia">
+      <div class="h2"><span class="idx">08</span><h2>como <em>funciona</em></h2></div>
+      <div class="card guide">
+        <h3>O que a mesa faz</h3>
+        <p>Ela compara ao vivo o preço do dólar digital (USDT) em reais em várias corretoras. Quando uma vende mais barato e outra compra mais caro, existe uma diferença. A operação é: comprar USDT com reais na mais barata, mandar o USDT para a outra e vender por reais lá.</p>
+        <h3>O que entra na conta</h3>
+        <ul>
+          <li>Taxa de compra na primeira corretora.</li>
+          <li>Taxa de saque do USDT (depende da rede: BEP20 costuma ser a mais barata).</li>
+          <li>Taxa de venda na segunda corretora.</li>
+          <li>O preço real do livro de ofertas para o valor inteiro, não só o melhor preço.</li>
+          <li>O tempo da transferência: na venda, o simulador usa o preço do momento em que o USDT chega, igual na vida real.</li>
+        </ul>
+        <h3>O que o simulador ainda não cobra</h3>
+        <ul>
+          <li>Taxa de depósito ou saque em reais via Pix, se a sua corretora cobrar.</li>
+          <li>O dinheiro fica na corretora onde você vendeu. Para repetir a mesma rota, é preciso mandar os reais de volta (Pix), o que leva tempo.</li>
+        </ul>
+        <h3>Antes de usar dinheiro de verdade</h3>
+        <ul>
+          <li>Rode o simulador por alguns dias e veja no Histórico se o lucro se mantém com as suas taxas reais.</li>
+          <li>Desconfie de plataformas que prometem lucro diário garantido ou pedem chave de API com permissão de saque.</li>
+          <li>Diferenças grandes costumam durar segundos e somem quando muita gente opera a mesma rota.</li>
+          <li>Isto não é recomendação de investimento.</li>
+        </ul>
+      </div>
+    </section>
+  </div></main>
+</div>
+
+<!-- confirmar -->
+<div class="modal" id="mConf" hidden>
+  <div class="box" role="dialog" aria-modal="true" aria-labelledby="mConfT">
+    <div class="row" style="justify-content:space-between"><div class="eyebrow acc">Confirmar operação</div><button class="lnk" data-fechar>✕</button></div>
+    <h3 id="mConfT">confirmar operação</h3>
+    <div id="mConfRota" class="num" style="font-size:13px"></div>
+    <div><div class="kv"><span>Diferença líquida estimada</span><span id="mConfPct"></span></div><div class="kv"><span>Lucro estimado</span><span id="mConfLucro" class="good"></span></div></div>
+    <label class="f">Valor da operação (R$)<input id="mConfValor" type="number" min="50" step="100" class="num" style="font-size:20px;padding:12px"></label>
+    <div class="kv"><span>Saldo disponível na corretora de compra</span><span id="mConfSaldo"></span></div>
+    <div id="mConfAviso"></div>
+    <div class="banner">Simulação: usa preços reais, mas o dinheiro é virtual. Os preços podem mudar entre o cálculo e a execução.</div>
+    <div class="row" style="justify-content:flex-end"><button data-fechar>Cancelar</button><button class="go" id="mConfGo">Executar agora</button></div>
   </div>
 </div>
 
-<section class="card">
-  <div class="card-head"><h2>Preços por corretora</h2>
-    <div class="legend"><span class="best-ask">mais barato p/ comprar</span><span class="best-bid">paga mais p/ vender</span><span>em reais · em cima: compra · embaixo: venda</span></div>
+<!-- execução -->
+<div class="modal" id="mExec" hidden>
+  <div class="box" role="dialog" aria-modal="true" aria-labelledby="mExecT">
+    <div class="row" style="justify-content:space-between"><div class="eyebrow acc" id="mExecEy">Em execução</div><button class="lnk" id="mExecMin">minimizar</button></div>
+    <h3 id="mExecT">operação em andamento</h3>
+    <div class="grid g3" style="gap:8px">
+      <div><div class="eyebrow">Rota</div><div class="num" id="mExecRota" style="font-size:13px"></div></div>
+      <div><div class="eyebrow">Valor</div><div class="num good" id="mExecValor"></div></div>
+      <div><div class="eyebrow">Tempo</div><span class="timer" id="mExecTempo">00:00</span></div>
+    </div>
+    <div class="steps" id="mExecSteps"></div>
+    <div id="mExecRes"></div>
   </div>
-  <div class="note warn" id="errosTxt" hidden></div>
-  <div class="scroll"><table class="mtx"><thead id="mHead"></thead><tbody id="mBody"></tbody></table></div>
-</section>
-
-<section class="card">
-  <div class="card-head"><h2>Histórico de sinais</h2><button id="btnLimpar">Limpar histórico</button></div>
-  <div class="log" id="log"><div class="empty">Nenhum sinal ainda.</div></div>
-</section>
-
-<footer>
-  Este painel só lê preços públicos e não faz ordens. Os sinais rodam enquanto a página está aberta. Ele não prevê o mercado: mostra diferenças que existem agora.
-  Antes de transferir, confira se o depósito e o saque da moeda estão liberados nas duas corretoras e na mesma rede,
-  e lembre que a diferença pode sumir enquanto a transferência está a caminho. Diferenças acima de 5% quase sempre são armadilha
-  (rede suspensa, moeda diferente com o mesmo nome ou pouca liquidez). Não é recomendação de investimento.
-</footer>
 </div>
+
+<div class="toasts" id="toasts"></div>
 
 <script>
-const $ = s => document.querySelector(s);
-const NOMES = {binance:"Binance",bitget:"Bitget",bybit:"Bybit",kucoin:"KuCoin",gate:"Gate.io",mexc:"MEXC",okx:"OKX",bingx:"BingX",coinex:"CoinEx"};
-const PADRAO = {
-  moedas: ["BTC","ETH","SOL","XRP","DOGE","ADA","TRX","LTC","AVAX","LINK","TON","SUI"],
-  corretoras: Object.keys(NOMES),
-  // taxa de negociação "taker" (ordem a mercado), conta comum, em %
-  taxas: {binance:0.10,bitget:0.10,bybit:0.10,kucoin:0.10,gate:0.10,mexc:0.05,okx:0.10,bingx:0.10,coinex:0.20},
-  // taxa de saque estimada em unidades da moeda (rede mais barata)
-  saques: {BTC:0.0002,ETH:0.0005,SOL:0.01,XRP:0.2,DOGE:4,ADA:1,TRX:1,LTC:0.001,AVAX:0.01,LINK:0.3,TON:0.05,SUI:0.1,DOT:0.1,BNB:0.0005,USDT:1},
-  valor_brl: 5000, minimo: 0.30, transferir: true,
+// ============================================================ dados fixos
+const EX = {
+  binance:{nome:"Binance",cor:"#F0B90B",s:"BN"}, bitget:{nome:"Bitget",cor:"#22D3EE",s:"BG"},
+  bybit:{nome:"Bybit",cor:"#F7A600",s:"BY"}, kucoin:{nome:"KuCoin",cor:"#23AF91",s:"KC"},
+  mercadobitcoin:{nome:"Mercado Bitcoin",cor:"#FF5A36",s:"MB"}, bitso:{nome:"Bitso",cor:"#53D3A6",s:"BT"},
+  novadax:{nome:"NovaDAX",cor:"#5B8DEF",s:"ND"}, foxbit:{nome:"Foxbit",cor:"#F37021",s:"FX"},
 };
-const CONFIRMACOES = 2, LIMITE_SUSPEITO = 5, INTERVALO_MS = 5000;
+const PADRAO = {
+  corretoras: Object.keys(EX),
+  // taxa de negociação a mercado (taker), conta comum, em %
+  taxas: {binance:0.10,bitget:0.10,bybit:0.10,kucoin:0.10,mercadobitcoin:0.70,bitso:0.65,novadax:0.50,foxbit:0.50},
+  // taxa de saque do USDT, em USDT (rede mais barata disponível)
+  saque: {binance:0.01,bitget:0.10,bybit:0.30,kucoin:1,mercadobitcoin:1,bitso:1,novadax:1,foxbit:1},
+  rede: {binance:"BEP20",bitget:"BEP20",bybit:"BEP20",kucoin:"TRC20",mercadobitcoin:"Polygon",bitso:"TRC20",novadax:"TRC20",foxbit:"TRC20"},
+  nacional: {binance:false,bitget:false,bybit:false,kucoin:false,mercadobitcoin:true,bitso:false,novadax:true,foxbit:true},
+  valor: 5000, minimo: 0.10, modo: "transferir", tempo: 3, acelerar: true,
+  iniBrl: 10000, iniUsdt: 0,
+};
+const AUTO_PADRAO = { on:false, corretoras:Object.keys(EX), minimo:0.3, max:5000, intervalo:1, ultima:0 };
+const MINIMOS = [0.1,0.2,0.3,0.5,1,2], INTERVALOS = [1,2,3,5,10], POLL_MS = 4000, POR_PAG = 20;
 
-function lerLS(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } }
-function salvarLS(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+// ============================================================ estado
+const ler = (k, d) => { try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } };
+const gravar = (k, v) => { try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} };
 const clone = o => JSON.parse(JSON.stringify(o));
+function mesclar(base, salvo){ const o = clone(base); for(const k in (salvo||{})){ o[k] = (base[k] && typeof base[k]==="object" && !Array.isArray(base[k])) ? Object.assign(clone(base[k]), salvo[k]) : salvo[k]; } return o; }
 
-let cfg = Object.assign(clone(PADRAO), lerLS("radar_cfg", {}));
-cfg.taxas = Object.assign(clone(PADRAO.taxas), cfg.taxas || {});
-cfg.saques = Object.assign(clone(PADRAO.saques), cfg.saques || {});
-let cfgLocal = clone(cfg);
-let dados = null, ops = [], COT = 0;
-let seguidas = new Map(), ativas = new Set(), historico = [];
-let eventos = lerLS("radar_eventos", []);
-let tracks = lerLS("radar_tracks", []);
-let alertas = false, primeiro = true, ultimaOk = 0;
+let cfg = mesclar(PADRAO, ler("mesa_cfg", null));
+let auto = mesclar(AUTO_PADRAO, ler("mesa_auto", null));
+let sim = ler("mesa_sim", null);
+function saldosIniciais(){ const s = {}; for(const c of Object.keys(EX)) s[c] = {brl: +cfg.iniBrl || 0, usdt: +cfg.iniUsdt || 0}; return s; }
+if(!sim || !sim.saldos) sim = { saldos: saldosIniciais(), hist: [], log: [], criado: Date.now() };
+for(const c of Object.keys(EX)) if(!sim.saldos[c]) sim.saldos[c] = {brl:+cfg.iniBrl||0, usdt:+cfg.iniUsdt||0};
+const salvarSim = () => gravar("mesa_sim", sim);
 
-const nf = (n, d=2) => n == null || isNaN(n) ? "—" : n.toLocaleString("pt-BR",{minimumFractionDigits:d,maximumFractionDigits:d});
-const px = n => { if(n==null || isNaN(n)) return "—"; const d = n>=1000?2:n>=1?4:n>=0.01?6:8; return n.toLocaleString("pt-BR",{minimumFractionDigits:Math.min(d,2),maximumFractionDigits:d}); };
-const pct = n => (n>0?"+":"") + nf(n, 2) + "%";
-const brl = n => "R$ " + nf(n, 2);
-const rs = n => (n>0?"+":n<0?"−":"") + "R$ " + nf(Math.abs(n), 2);
-const pxr = n => n == null ? "—" : px(n * COT);
-const qt = n => n.toLocaleString("pt-BR",{maximumFractionDigits:8});
-const hora = t => new Date(t*1000).toLocaleTimeString("pt-BR");
+let dados = null, rotas = [], hist = {}, ultimaOk = 0, emExecucao = null, livroAberto = {}, pagHist = 0, periodo = 0;
+
+// ============================================================ formatos
+const nf = (n, d=2) => n == null || !isFinite(n) ? "—" : n.toLocaleString("pt-BR",{minimumFractionDigits:d,maximumFractionDigits:d});
+const R = n => "R$ " + nf(n);
+const RS = n => (n > 0 ? "+" : n < 0 ? "−" : "") + "R$ " + nf(Math.abs(n));
+const P4 = n => nf(n, 4);
+const pct = (n, d=3) => (n > 0 ? "+" : "") + nf(n, d) + "%";
+const U = n => nf(n, 2) + " USDT";
+const hora = t => new Date(t).toLocaleTimeString("pt-BR");
+const dataHora = t => new Date(t).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const chave = o => [o.moeda, o.compra, o.venda].join("|");
+const $ = s => document.querySelector(s);
+const nome = c => EX[c] ? EX[c].nome : c;
+const logo = c => `<span class="logo" style="background:${EX[c].cor}">${EX[c].s}</span>`;
+const logoP = c => `<span class="logo" style="background:${EX[c].cor};width:20px;height:20px;font-size:8px;display:inline-grid;vertical-align:middle;border-radius:5px">${EX[c].s}</span>`;
+const dorme = ms => new Promise(r => setTimeout(r, ms));
+function toast(msg, tipo=""){ const d = document.createElement("div"); d.className = "toast " + tipo; d.textContent = msg; $("#toasts").appendChild(d); setTimeout(() => d.remove(), 6000); }
 
-async function api(path){
-  const r = await fetch(path, {cache:"no-store"});
-  let j; try{ j = await r.json(); }catch(e){ throw new Error("resposta inválida do servidor"); }
-  if(!r.ok) throw new Error(j.erro || "erro " + r.status);
-  return j;
-}
-
-// ---------- cálculo: comprar numa corretora, vender na outra, com taxas
-function calcular(){
-  const lista = [];
-  if(!dados || !COT) return lista;
-  const valor = cfg.valor_brl / COT;               // em dólar digital
-  for(const m of cfg.moedas){
-    const ofertas = cfg.corretoras.filter(c => dados.precos[c] && dados.precos[c][m]).map(c => [c, dados.precos[c][m]]);
-    for(const [ca, pa] of ofertas) for(const [cb, pb] of ofertas){
-      if(ca === cb) continue;
-      const ask = pa.ask, bid = pb.bid;
-      const fa = (cfg.taxas[ca] ?? 0.1) / 100, fb = (cfg.taxas[cb] ?? 0.1) / 100;
-      const qtd = valor / ask * (1 - fa);
-      const saque = cfg.transferir ? (+cfg.saques[m] || 0) : 0;
-      const chega = Math.max(qtd - saque, 0);
-      const final = chega * bid * (1 - fb);
-      const lucro = final - valor;
-      const bruto = (bid / ask - 1) * 100;
-      lista.push({moeda:m, compra:ca, venda:cb, ask, bid, bruto, liquido: lucro / valor * 100, lucro, final, suspeito: bruto > LIMITE_SUSPEITO});
-    }
+// ============================================================ cálculo
+// percorre o livro: porValor=true gasta 'qtd' reais comprando; false vende 'qtd' USDT
+function percorrer(niveis, qtd, porValor){
+  let resto = qtd, rec = 0, gasto = 0;
+  for(const [p, v] of niveis || []){
+    const usar = porValor ? Math.min(resto, p*v) : Math.min(resto, v);
+    rec += porValor ? usar/p : usar*p; gasto += usar; resto -= usar;
+    if(resto <= 1e-9) break;
   }
-  return lista.sort((a, b) => b.liquido - a.liquido);
+  return { rec, medio: porValor ? (rec ? gasto/rec : 0) : (gasto ? rec/gasto : 0), faltou: resto > 1e-6 };
 }
-
-function registrar(tipo, texto){
-  eventos.unshift({t: Date.now()/1000, tipo, texto});
-  eventos = eventos.slice(0, 100); salvarLS("radar_eventos", eventos);
-  avisar(tipo === "entrar" ? "Sinal: ENTRAR" : "Oportunidade fechou", texto, tipo === "entrar" ? 880 : 440);
+// rota completa: comprar USDT em a com 'valor' reais, levar para b e vender
+function calcRota(a, b, valor, livA, livB){
+  const fa = (+cfg.taxas[a] || 0)/100, fb = (+cfg.taxas[b] || 0)/100;
+  const compra = percorrer(livA.asks, valor, true);
+  const taxaA = compra.rec * fa;
+  const saque = cfg.modo === "transferir" ? (+cfg.saque[a] || 0) : 0;
+  const chega = Math.max(compra.rec - taxaA - saque, 0);
+  const venda = percorrer(livB.bids, chega, false);
+  const taxaB = venda.rec * fb;
+  const final = venda.rec - taxaB, lucro = final - valor;
+  return { a, b, valor, usdt: compra.rec, medioCompra: compra.medio, taxaA, saque, chega, medioVenda: venda.medio,
+    brlVenda: venda.rec, taxaB, final, lucro, pct: valor ? lucro/valor*100 : 0,
+    bruto: (livB.bids[0][0]/livA.asks[0][0] - 1)*100, faltou: compra.faltou || venda.faltou };
 }
-
-// sinais de entrar e de fechar
-function processar(){
-  ops = calcular();
-  const vistos = new Set();
-  for(const o of ops){
-    if(o.suspeito || o.liquido < cfg.minimo) continue;
-    const k = chave(o); vistos.add(k);
-    seguidas.set(k, (seguidas.get(k) || 0) + 1);
-    if(seguidas.get(k) >= CONFIRMACOES && !ativas.has(k)){
-      ativas.add(k);
-      registrar("entrar", `ENTRAR ${o.moeda}: comprar na ${NOMES[o.compra]} a R$ ${pxr(o.ask)} e vender na ${NOMES[o.venda]} a R$ ${pxr(o.bid)} → ${pct(o.liquido)} (${rs(o.lucro * COT)})`);
-    }
+function motivoInviavel(r){
+  if(r.faltou) return "livro curto para esse valor";
+  if(sim.saldos[r.a].brl < r.valor) return `saldo em reais insuficiente na ${nome(r.a)}`;
+  if(cfg.modo === "instantaneo" && sim.saldos[r.b].usdt < r.chega) return `falta USDT na ${nome(r.b)}`;
+  if(r.pct < cfg.minimo) return r.lucro <= 0 ? "as taxas comem a diferença" : `abaixo do mínimo de ${nf(cfg.minimo)}%`;
+  return "";
+}
+function calcularRotas(valor, lista){
+  const out = [];
+  if(!dados) return out;
+  const cs = (lista || cfg.corretoras).filter(c => dados.cotacoes[c]);
+  for(const a of cs) for(const b of cs){
+    if(a === b) continue;
+    out.push(calcRota(a, b, valor, dados.cotacoes[a], dados.cotacoes[b]));
   }
-  for(const k of [...seguidas.keys()]) if(!vistos.has(k)) seguidas.delete(k);
-  const atual = new Map(ops.map(o => [chave(o), o]));
-  for(const k of [...ativas]){
-    const o = atual.get(k);
-    if(!o || o.liquido < 0){
-      ativas.delete(k);
-      const [m, a, b] = k.split("|");
-      registrar("sair", `FECHOU ${m} ${NOMES[a]} → ${NOMES[b]}: a diferença acabou${o ? " (" + pct(o.liquido) + ")" : ""}`);
-    }
-  }
-  const limpas = ops.filter(o => !o.suspeito);
-  if(limpas.length){ historico.push([dados.t, limpas[0].liquido]); historico = historico.slice(-240); }
+  return out.sort((x, y) => y.lucro - x.lucro);
 }
 
-// ---------- configuração
-function montarControles(){
-  cfgLocal = clone(cfg);
-  $("#cValor").value = cfg.valor_brl; $("#cMin").value = cfg.minimo;
-  $("#cMoedas").value = cfg.moedas.join(", ");
-  $("#sValor").value = cfg.valor_brl;
-  desenharModo(); desenharChips(); desenharTaxas();
-}
-function desenharModo(){
-  document.querySelectorAll("#cModo button").forEach(b => b.classList.toggle("on", (b.dataset.v==="1") === cfgLocal.transferir));
-  $("#modoExpl").textContent = cfgLocal.transferir
-    ? "Transferindo: compra numa corretora, saca a moeda e vende na outra. A taxa de saque entra na conta e há risco do preço mudar durante a transferência."
-    : "Saldo nas duas: você já tem dólar numa e moeda na outra, compra e vende ao mesmo tempo. Sem taxa de saque na hora, mas precisa do dobro de capital e rebalancear de vez em quando.";
-}
-function desenharChips(){
-  const erros = dados ? dados.erros : {};
-  $("#cCorr").innerHTML = Object.keys(NOMES).map(c =>
-    `<button class="chip ${cfgLocal.corretoras.includes(c)?"on":""} ${erros[c]?"err":""}" data-c="${c}" title="${erros[c]?esc("Erro: "+erros[c]):""}">${NOMES[c]}</button>`).join("");
-}
-function desenharTaxas(){
-  $("#fTaxas").innerHTML = Object.keys(NOMES).map(c =>
-    `<label>${NOMES[c]}<input type="number" step="0.01" min="0" class="num" data-taxa="${c}" value="${cfgLocal.taxas[c] ?? 0.1}"></label>`).join("");
-  $("#fSaques").innerHTML = cfgLocal.moedas.map(m =>
-    `<label>${esc(m)}<input type="number" step="any" min="0" class="num" data-saque="${esc(m)}" value="${cfgLocal.saques[m] ?? 0}"></label>`).join("");
-}
-const lerMoedas = () => [...new Set($("#cMoedas").value.split(/[,\s]+/).map(s => s.trim().toUpperCase()).filter(s => /^[A-Z0-9]{1,15}$/.test(s)))].slice(0, 30);
-$("#cModo").addEventListener("click", e => { const b = e.target.closest("button"); if(!b) return; cfgLocal.transferir = b.dataset.v === "1"; desenharModo(); });
-$("#cCorr").addEventListener("click", e => { const b = e.target.closest(".chip"); if(!b) return; const c = b.dataset.c;
-  cfgLocal.corretoras = cfgLocal.corretoras.includes(c) ? cfgLocal.corretoras.filter(x => x !== c) : [...cfgLocal.corretoras, c]; desenharChips(); });
-$("#cMoedas").addEventListener("change", () => { cfgLocal.moedas = lerMoedas(); desenharTaxas(); });
-
-$("#btnSalvar").addEventListener("click", () => {
-  cfgLocal.valor_brl = Math.max(parseFloat($("#cValor").value) || 5000, 10);
-  cfgLocal.minimo = parseFloat($("#cMin").value) || 0;
-  cfgLocal.moedas = lerMoedas().length ? lerMoedas() : clone(PADRAO.moedas);
-  document.querySelectorAll("[data-taxa]").forEach(i => cfgLocal.taxas[i.dataset.taxa] = parseFloat(i.value) || 0);
-  document.querySelectorAll("[data-saque]").forEach(i => cfgLocal.saques[i.dataset.saque] = parseFloat(i.value) || 0);
-  if(cfgLocal.corretoras.length < 2){ $("#salvoTxt").textContent = "Escolha pelo menos duas corretoras."; return; }
-  cfg = clone(cfgLocal); salvarLS("radar_cfg", cfg);
-  seguidas.clear(); ativas.clear(); historico = [];
-  $("#sValor").value = cfg.valor_brl;
-  $("#salvoTxt").textContent = "Aplicado. Atualizando os preços…";
-  atualizar();
-});
-
-// ---------- alertas
-$("#btnAlert").addEventListener("click", async () => {
-  alertas = !alertas;
-  if(alertas && "Notification" in window && Notification.permission === "default"){ try{ await Notification.requestPermission(); }catch(e){} }
-  $("#btnAlert").textContent = alertas ? "Alertas ligados" : "Ativar alertas";
-  $("#btnAlert").classList.toggle("primary", alertas);
-  if(alertas) bip(660);
-});
-let audio;
-function bip(f=880){ try{ audio = audio || new AudioContext(); const o = audio.createOscillator(), g = audio.createGain();
-  o.frequency.value = f; o.connect(g); g.connect(audio.destination); g.gain.setValueAtTime(.15, audio.currentTime);
-  g.gain.exponentialRampToValueAtTime(.001, audio.currentTime + .4); o.start(); o.stop(audio.currentTime + .4); }catch(e){} }
-function avisar(titulo, corpo, f){ if(!alertas) return; bip(f);
-  try{ if("Notification" in window && Notification.permission === "granted") new Notification(titulo, {body: corpo}); }catch(e){} }
-
-// ---------- tela
-function statusOp(o){
-  if(o.suspeito) return ["SUSPEITO","p-susp"];
-  if(ativas.has(chave(o))) return ["ENTRAR","p-entrar"];
-  if(o.liquido >= cfg.minimo) return ["CONFIRMANDO","p-conf"];
-  if(o.liquido > 0) return ["PERTO","p-perto"];
-  return ["NÃO COMPENSA","p-neg"];
-}
-
-function render(){
-  const e = dados;
-  $("#cotVal").textContent = "R$ " + nf(COT, 4);
-  $("#cotFonte").textContent = e.cotacao.fonte;
-  $("#cotFonte").className = e.cotacao.ao_vivo ? "faint" : "warn";
-  $("#dot").classList.add("on");
-  $("#liveTxt").textContent = `ao vivo · atualizado às ${hora(e.t)}`;
-  $("#nCorr").textContent = cfg.corretoras.length;
-  desenharChips();
-
-  // sinal principal
-  const limpas = ops.filter(o => !o.suspeito);
-  const emAberto = limpas.filter(o => ativas.has(chave(o)));
-  let o, cls, tag;
-  if(emAberto.length){ o = emAberto[0]; cls = "entrar"; tag = "ENTRAR"; }
-  else if(limpas[0] && limpas[0].liquido >= cfg.minimo){ o = limpas[0]; cls = "confirmando"; tag = "CONFIRMANDO"; }
-  else { o = limpas[0]; cls = "aguardar"; tag = "AGUARDAR"; }
-  $("#signal").className = "signal " + cls; $("#sigTag").textContent = tag;
-  if(o){
-    if(cls === "aguardar"){
-      $("#sigTxt").textContent = `Nenhuma diferença acima de ${nf(cfg.minimo)}% agora`;
-      $("#sigSub").textContent = `Melhor no momento: ${o.moeda} · comprar na ${NOMES[o.compra]} e vender na ${NOMES[o.venda]}`;
-    }else{
-      $("#sigTxt").innerHTML = `Comprar <b>${esc(o.moeda)}</b> na <b>${NOMES[o.compra]}</b> a <span class="num">R$ ${pxr(o.ask)}</span> → vender na <b>${NOMES[o.venda]}</b> a <span class="num">R$ ${pxr(o.bid)}</span>`;
-      $("#sigSub").textContent = cls === "entrar"
-        ? `Confirmado em ${CONFIRMACOES} leituras seguidas. Saia (venda) assim que a moeda chegar, ou se o líquido ficar negativo.`
-        : `Apareceu agora. Esperando mais uma leitura para confirmar que não é só um piscar de preço.`;
-    }
-    $("#sigVal").textContent = pct(o.liquido);
-    $("#sigVal").className = "n num " + (o.liquido > 0 ? "good" : "bad");
-    $("#sigValSub").textContent = `${rs(o.lucro * COT)} colocando ${brl(cfg.valor_brl)}`;
-  }else{
-    $("#sigTxt").textContent = "Sem preços suficientes para comparar";
-    $("#sigSub").textContent = "Confira se pelo menos duas corretoras estão respondendo.";
-    $("#sigVal").textContent = "—"; $("#sigValSub").textContent = "";
-  }
-
-  // oportunidades
-  const linhas = ops.slice(0, 20);
-  $("#tOps").innerHTML = linhas.length ? linhas.map(o => {
-    const [t, c] = statusOp(o);
-    return `<tr>
-      <td><b>${esc(o.moeda)}</b></td><td>${NOMES[o.compra]}</td><td>${NOMES[o.venda]}</td>
-      <td class="r num">${pxr(o.ask)}</td><td class="r num">${pxr(o.bid)}</td>
-      <td class="r num muted">${pct(o.bruto)}</td>
-      <td class="r num ${o.liquido>0?"good":"bad"}"><b>${pct(o.liquido)}</b></td>
-      <td class="r num ${o.lucro>0?"good":"bad"}">${rs(o.lucro * COT)}</td>
-      <td><span class="pill ${c}">${t}</span></td>
-      <td><button data-sim="${esc(o.moeda)}|${o.compra}|${o.venda}">Simular</button></td></tr>`;
-  }).join("") : `<tr><td colspan="10" class="empty">Sem preços suficientes para comparar.</td></tr>`;
-
-  // preços por corretora
-  const corrs = cfg.corretoras;
-  $("#mHead").innerHTML = `<tr><th>Moeda</th>${corrs.map(c => `<th class="r">${NOMES[c]}${e.erros[c]?' <span class="bad" title="'+esc(e.erros[c])+'">!</span>':""}</th>`).join("")}</tr>`;
-  $("#mBody").innerHTML = cfg.moedas.map(m => {
-    const vals = corrs.map(c => e.precos[c] && e.precos[c][m]);
-    const asks = vals.filter(Boolean).map(v => v.ask), bids = vals.filter(Boolean).map(v => v.bid);
-    const minA = Math.min(...asks), maxB = Math.max(...bids);
-    return `<tr><td><b>${esc(m)}</b></td>${vals.map(v => v ? `<td class="r num"><div class="cell">
-      <span class="${v.ask===minA&&asks.length>1?"best-ask":""}">${pxr(v.ask)}</span>
-      <span class="${v.bid===maxB&&bids.length>1?"best-bid":"muted"}">${pxr(v.bid)}</span></div></td>` : `<td class="r faint">—</td>`).join("")}</tr>`;
-  }).join("");
-  const errs = Object.entries(e.erros);
-  $("#errosTxt").innerHTML = errs.length ? errs.map(([c, msg]) => `<b>${NOMES[c]}</b>: ${esc(msg)}`).join(" · ") : "";
-  $("#errosTxt").hidden = !errs.length;
-
-  desenharLog();
-  desenharGrafico();
-  desenharTracks();
-  preencherSelects();
-}
-
-function desenharLog(){
-  $("#log").innerHTML = eventos.length ? eventos.map(ev =>
-    `<div><span class="h">${hora(ev.t)}</span><span class="${ev.tipo==="entrar"?"good":"warn"}">${esc(ev.texto)}</span></div>`).join("")
-    : `<div class="empty">Nenhum sinal ainda. Quando aparecer uma diferença acima do seu mínimo por ${CONFIRMACOES} leituras seguidas, ela aparece aqui.</div>`;
-}
-
-function preencherSelects(){
-  const encher = (sel, itens, rot) => { const v = sel.value; const novo = itens.map(i => `<option value="${esc(i)}">${esc(rot(i))}</option>`).join("");
-    if(sel.dataset.h !== novo){ sel.innerHTML = novo; sel.dataset.h = novo; if(itens.includes(v)) sel.value = v; } };
-  encher($("#sMoeda"), cfg.moedas, x => x);
-  encher($("#sCompra"), cfg.corretoras, x => NOMES[x]);
-  encher($("#sVenda"), cfg.corretoras, x => NOMES[x]);
-}
-
-function desenharGrafico(){
-  const box = $("#chart"), h = historico, minimo = cfg.minimo;
-  if(h.length < 2){ box.innerHTML = `<div class="empty">Juntando leituras…</div>`; return; }
-  const W = 520, H = 150, pl = 40, pr = 10, pt = 10, pb = 22;
-  const ys = h.map(p => p[1]);
-  let lo = Math.min(...ys, 0, minimo), hi = Math.max(...ys, minimo, 0.05);
-  const pad = (hi - lo) * 0.15 || 0.1; lo -= pad; hi += pad;
-  const t0 = h[0][0], t1 = h[h.length-1][0];
-  const X = t => pl + (t - t0) / ((t1 - t0) || 1) * (W - pl - pr);
-  const Y = v => pt + (hi - v) / (hi - lo) * (H - pt - pb);
-  const pts = h.map(p => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(" ");
-  const area = `${X(t0)},${Y(lo)} ${pts} ${X(t1)},${Y(lo)}`;
-  const ultimo = h[h.length-1];
-  const ticks = [lo + pad, 0, hi - pad].filter((v,i,a) => a.findIndex(x => Math.abs(x - v) < (hi-lo)*0.08) === i);
-  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Melhor lucro líquido ao longo do tempo">
-    ${ticks.map(v => `<line x1="${pl}" x2="${W-pr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--rule)" stroke-width="1"/><text x="${pl-6}" y="${Y(v)+3}" text-anchor="end">${nf(v,2)}</text>`).join("")}
-    <line x1="${pl}" x2="${W-pr}" y1="${Y(minimo)}" y2="${Y(minimo)}" stroke="var(--good)" stroke-dasharray="4 4" stroke-width="1"/>
-    <text x="${W-pr}" y="${Y(minimo)-4}" text-anchor="end" style="fill:var(--good)">mínimo ${nf(minimo)}%</text>
-    <polygon points="${area}" fill="var(--accent-soft)"/>
-    <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linejoin="round"/>
-    <circle cx="${X(ultimo[0])}" cy="${Y(ultimo[1])}" r="3.5" fill="var(--accent)"/>
-    <text x="${pl}" y="${H-6}">${hora(t0)}</text><text x="${W-pr}" y="${H-6}" text-anchor="end">${hora(t1)}</text>
-  </svg>`;
-}
-
-// ---------- simulador (usa o livro de ofertas de verdade)
-function percorrer(niveis, quantidade, porValor){
-  let resto = quantidade, recebido = 0, gasto = 0;
-  for(const [p, v] of niveis){
-    if(porValor){ const usar = Math.min(resto, p * v); recebido += usar / p; gasto += usar; resto -= usar; }
-    else { const usar = Math.min(resto, v); recebido += usar * p; gasto += usar; resto -= usar; }
-    if(resto <= 1e-12) break;
-  }
-  const medio = porValor ? (recebido ? gasto / recebido : 0) : (gasto ? recebido / gasto : 0);
-  return {recebido, medio, faltou: resto > 1e-9};
-}
-
-document.addEventListener("click", ev => {
-  const b = ev.target.closest("[data-sim]"); if(!b) return;
-  const [m, c, v] = b.dataset.sim.split("|");
-  preencherSelects(); $("#sMoeda").value = m; $("#sCompra").value = c; $("#sVenda").value = v;
-  $("#simCard").scrollIntoView({behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block:"start"});
-  simular();
-});
-$("#btnSim").addEventListener("click", simular);
-
-async function simular(){
-  const m = $("#sMoeda").value, c = $("#sCompra").value, v = $("#sVenda").value;
-  const valorBrl = Math.max(parseFloat($("#sValor").value) || 5000, 10);
-  if(c === v){ $("#simOut").innerHTML = `<div class="note warn">Escolha corretoras diferentes para comprar e vender.</div>`; return; }
-  if(!COT){ $("#simOut").innerHTML = `<div class="note warn">Ainda sem cotação do dólar. Espere a primeira leitura.</div>`; return; }
-  $("#simOut").innerHTML = `<div class="empty">Lendo o livro de ofertas da ${NOMES[c]} e da ${NOMES[v]}…</div>`;
+// ============================================================ leitura dos preços
+let lendo = false;
+async function ler_precos(){
+  if(lendo) return; lendo = true;
   try{
-    const [la, lb] = await Promise.all([api(`/api/livro?corretora=${c}&moeda=${encodeURIComponent(m)}`), api(`/api/livro?corretora=${v}&moeda=${encodeURIComponent(m)}`)]);
-    const C = COT, valor = valorBrl / C;
-    const ta = (cfg.taxas[c] ?? 0.1) / 100, tb = (cfg.taxas[v] ?? 0.1) / 100;
-    const compra = percorrer(la.asks, valor, true);
-    const taxaA = compra.recebido * ta;
-    const saque = cfg.transferir ? (+cfg.saques[m] || 0) : 0;
-    const chega = Math.max(compra.recebido - taxaA - saque, 0);
-    const venda = percorrer(lb.bids, chega, false);
-    const taxaB = venda.recebido * tb;
-    const final = venda.recebido - taxaB, lucro = final - valor;
-    const R = n => brl(n * C), P = n => "R$ " + px(n * C);
-    const L = (a, b, cls="") => `<div class="row ${cls}"><span>${a}</span><span class="num">${b}</span></div>`;
-    $("#simOut").innerHTML = `<div class="receipt">
-      <div class="step">1 · Compra na ${NOMES[c]}</div>
-      ${L("Você coloca", brl(valorBrl) + ` <span class="faint">(US$ ${nf(valor)})</span>`)}
-      ${L("Preço médio pago (livro de ofertas)", P(compra.medio))}
-      ${L("Moeda comprada", qt(compra.recebido) + " " + esc(m))}
-      ${L(`Taxa de negociação (${nf(ta*100)}%)`, "− " + qt(taxaA) + " " + esc(m) + ` <span class="faint">(${R(taxaA * compra.medio)})</span>`)}
-      ${cfg.transferir ? `<div class="step">2 · Transferência</div>
-      ${L("Taxa de saque", "− " + qt(saque) + " " + esc(m) + ` <span class="faint">(${R(saque * compra.medio)})</span>`)}` : ""}
-      ${L("Chega para vender", qt(chega) + " " + esc(m))}
-      <div class="step">${cfg.transferir ? 3 : 2} · Venda na ${NOMES[v]}</div>
-      ${L("Preço médio recebido (livro de ofertas)", P(venda.medio))}
-      ${L("Valor da venda", R(venda.recebido))}
-      ${L(`Taxa de negociação (${nf(tb*100)}%)`, "− " + R(taxaB))}
-      ${L("Você tira", R(final), "total")}
-      ${L("Resultado", `<span class="${lucro>0?"good":"bad"}">${rs(lucro * C)} (${pct(lucro / valor * 100)})</span>`, "total")}
-    </div>
-    <div class="faint" style="font-size:12px">Cotação usada: 1 dólar digital (USDT) = R$ ${nf(C, 4)}. Não inclui taxa de depósito ou saque em reais via Pix, se a sua corretora cobrar.</div>
-    ${compra.faltou || venda.faltou ? `<div class="note warn">Não há ofertas suficientes no livro para esse valor inteiro. Diminua o valor.</div>` : ""}
-    ${lucro <= 0 ? `<div class="note">Com as taxas, essa operação não compensa agora.</div>` : ""}
-    ${cfg.transferir ? `<div class="note">O preço de venda é o de agora. Se a transferência demorar, ele pode mudar. Confira se o saque e o depósito de ${esc(m)} estão liberados e na mesma rede nas duas corretoras.</div>` : ""}
-    <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="btnTrack">Acompanhar esta operação</button><span class="faint" style="font-size:12px;align-self:center">Lido às ${hora(la.t)}</span></div>`;
-    $("#btnTrack").addEventListener("click", () => {
-      tracks.unshift({ id: Date.now(), moeda: m, compra: c, venda: v, valor_brl: valorBrl, qtd: chega, taxa: tb * 100, inicio: Date.now()/1000, previsto_brl: lucro * C });
-      salvarLS("radar_tracks", tracks); desenharTracks();
-      $("#btnTrack").textContent = "Acompanhando"; $("#btnTrack").disabled = true;
-    });
-  }catch(e){ $("#simOut").innerHTML = `<div class="note warn">Não consegui ler o livro de ofertas: ${esc(e.message)}. Tente de novo em alguns segundos.</div>`; }
+    const r = await fetch(`/api/brl?corretoras=${cfg.corretoras.join(",")}`, {cache:"no-store"});
+    if(!r.ok) throw new Error("servidor " + r.status);
+    dados = await r.json();
+    ultimaOk = Date.now();
+    for(const [c, q] of Object.entries(dados.cotacoes)){
+      (hist[c] = hist[c] || []).push((q.ask + q.bid)/2);
+      if(hist[c].length > 90) hist[c].shift();
+    }
+    rotas = calcularRotas(+cfg.valor);
+    renderTudo();
+    rodarAutobot();
+  }catch(e){
+    if(Date.now() - ultimaOk > POLL_MS*3){ $("#dot").classList.remove("on"); $("#conn").textContent = "sem conexão"; }
+  }finally{ lendo = false; }
 }
 
-// ---------- operações em andamento (quando sair)
-function desenharTracks(){
-  const box = $("#tracks");
-  if(!tracks.length){ box.innerHTML = `<div class="empty">Depois de simular, clique em “Acompanhar” para o painel dizer quando vender.</div>`; return; }
-  box.innerHTML = tracks.map(t => {
-    const p = dados && dados.precos[t.venda] && dados.precos[t.venda][t.moeda];
-    const agora = p && COT ? t.qtd * p.bid * (1 - t.taxa/100) * COT : null;
-    const lucro = agora != null ? agora - t.valor_brl : null;
-    const lp = lucro != null ? lucro / t.valor_brl * 100 : null;
-    let tag = ["SEM PREÇO","p-neg"], dica = "Sem preço da corretora de venda no momento.";
-    if(lp != null){
-      if(lp >= cfg.minimo){ tag = ["VENDER AGORA","p-entrar"]; dica = `Vendendo agora na ${NOMES[t.venda]} você tira ${brl(agora)}.`; }
-      else if(lp > 0){ tag = ["LUCRO PEQUENO","p-perto"]; dica = `Ainda positivo, mas abaixo do seu mínimo. Vender agora garante ${rs(lucro)}.`; }
-      else { tag = ["NO PREJUÍZO","p-susp"]; dica = `A diferença fechou. Você pode esperar o preço voltar ou vender e aceitar ${rs(lucro)}.`; }
-    }
-    const min = Math.max(0, Math.round((Date.now()/1000 - t.inicio) / 60));
-    return `<div class="track">
-      <div class="t1"><div><b>${esc(t.moeda)}</b> <span class="muted">${NOMES[t.compra]} → ${NOMES[t.venda]}</span></div><span class="pill ${tag[1]}">${tag[0]}</span></div>
-      <div class="t2">
-        <div class="muted">Colocou<b class="num">${brl(t.valor_brl)}</b></div>
-        <div class="muted">Valeria agora<b class="num">${agora!=null?brl(agora):"—"}</b></div>
-        <div class="muted">Resultado<b class="num ${lucro>0?"good":"bad"}">${lucro!=null?rs(lucro):"—"}</b></div>
-      </div>
-      <div class="faint" style="font-size:12px">${dica} · aberta há ${min} min · previsto na entrada: ${rs(t.previsto_brl)}</div>
-      <div><button data-del="${t.id}">Encerrar acompanhamento</button></div>
+// ============================================================ render geral
+function renderTudo(){
+  $("#dot").classList.add("on");
+  $("#conn").textContent = `conectado · ${Object.keys(dados.cotacoes).length} corretoras`;
+  renderStrip(); renderTopRota(); renderCotacoes(); renderOps();
+  const pg = paginaAtual();
+  if(pg === "autobot") renderAutobot(false);
+}
+function renderStrip(){
+  const cs = Object.keys(EX).filter(c => cfg.corretoras.includes(c));
+  let tot = 0;
+  const mid = dados && Object.values(dados.cotacoes).length ? Object.values(dados.cotacoes).reduce((s, q) => s + (q.ask+q.bid)/2, 0)/Object.values(dados.cotacoes).length : 5;
+  const cel = cs.map(c => { const s = sim.saldos[c]; tot += s.brl + s.usdt*mid;
+    return `<div><div class="eyebrow">${nome(c)}</div><div class="v">${R(s.brl)}</div><div class="v2">${nf(s.usdt)} USDT</div></div>`; }).join("");
+  const ini = cs.length * ((+cfg.iniBrl||0) + (+cfg.iniUsdt||0)*mid);
+  $("#strip").innerHTML = cel + `<div class="tot"><div class="eyebrow">Total (virtual)</div><div class="v">${R(tot)}</div><div class="v2 ${tot>=ini?"good":"bad"}">${RS(tot-ini)} desde o início</div></div>
+    <div class="tot" style="display:flex;align-items:center"><button id="btnRebal" title="Simula transferir reais por Pix para deixar o mesmo valor em cada corretora" ${emExecucao ? "disabled" : ""}>Redistribuir reais</button></div>`;
+}
+document.addEventListener("click", e => {
+  if(!e.target.closest("#btnRebal") || emExecucao) return;
+  const cs = cfg.corretoras, tot = cs.reduce((s, c) => s + sim.saldos[c].brl, 0), cada = Math.floor(tot/cs.length*100)/100;
+  cs.forEach(c => sim.saldos[c].brl = cada); salvarSim();
+  registrarLog(`Reais redistribuídos por Pix (simulado): ${R(cada)} em cada corretora`, "acc");
+  toast(`Reais redistribuídos: ${R(cada)} em cada corretora. Na vida real isso é um Pix entre as corretoras.`, "acc");
+  renderStrip(); if(dados) renderOps();
+});
+function renderTopRota(){
+  const r = rotas.find(x => !x.faltou);
+  $("#toprota").innerHTML = r ? `<span class="dot on" style="background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)"></span>TOP ROTA <b>USDT (${nome(r.a)}) → BRL (${nome(r.b)})</b> <span class="${r.lucro>0?"good":"bad"}">${pct(r.pct)} · ${RS(r.lucro)} com ${R(r.valor)}</span>` : "";
+}
+
+// ---------- 01 cotações
+function renderCotacoes(){
+  const qs = Object.entries(dados.cotacoes);
+  if(!qs.length){ $("#exs").innerHTML = `<div class="empty">Nenhuma corretora respondeu ainda.</div>`; return; }
+  const mids = qs.map(([, q]) => (q.ask+q.bid)/2);
+  const med = mids.reduce((a, b) => a+b, 0)/mids.length;
+  const minA = qs.reduce((m, x) => x[1].ask < m[1].ask ? x : m);
+  const maxB = qs.reduce((m, x) => x[1].bid > m[1].bid ? x : m);
+  $("#kMed").textContent = "R$ " + P4(med);
+  $("#kMedS").textContent = `${qs.length} corretoras ativas`;
+  $("#kAsk").textContent = "R$ " + P4(minA[1].ask); $("#kAskS").textContent = "na " + nome(minA[0]);
+  $("#kBid").textContent = "R$ " + P4(maxB[1].bid); $("#kBidS").textContent = "na " + nome(maxB[0]);
+  const spr = (maxB[1].bid/minA[1].ask - 1)*100;
+  $("#kSpr").textContent = pct(spr); $("#kSpr").className = "big " + (spr > 0 ? "good" : "bad");
+
+  $("#exs").innerHTML = cfg.corretoras.map(c => {
+    const q = dados.cotacoes[c], s = sim.saldos[c];
+    if(!q) return `<div class="card ex">${`<div class="hd">${logo(c)}<div><div class="nm">${nome(c)}</div><div class="eyebrow">CEX · spot</div></div></div>`}<div class="err">${esc(dados.erros[c] || "sem resposta")}</div></div>`;
+    const cls = c === minA[0] ? "buy" : c === maxB[0] ? "sell" : "";
+    const tag = cls === "buy" ? "◆ COMPRAR" : cls === "sell" ? "◆ VENDER" : "";
+    return `<div class="card ex ${cls}">${tag ? `<span class="tag">${tag}</span>` : ""}
+      <div class="hd">${logo(c)}<div><div class="nm">${nome(c)}</div><div class="eyebrow">CEX · USDT → BRL</div></div><span class="dot on" style="margin-left:auto"></span></div>
+      <div class="px">R$ ${P4((q.ask+q.bid)/2)}</div>
+      <div class="ab"><span><small>COMPRA (ASK)</small><b class="acc">${P4(q.ask)}</b></span><span style="text-align:right"><small>VENDA (BID)</small><b class="good">${P4(q.bid)}</b></span></div>
+      ${sparkline(hist[c] || [], cls === "sell" ? "var(--good)" : cls === "buy" ? "var(--accent)" : "var(--muted)")}
+      <div class="bal"><span>${R(s.brl)}</span><span>${nf(s.usdt)} USDT</span></div>
+      <div class="row" style="justify-content:space-between"><button class="lnk" data-livro="${c}">${livroAberto[c] ? "▾" : "▸"} livro de ofertas</button><span class="faint num" style="font-size:11px">${q.ms} ms</span></div>
+      ${livroAberto[c] ? livroHtml(q) : ""}
     </div>`;
   }).join("");
 }
-document.addEventListener("click", ev => { const b = ev.target.closest("[data-del]"); if(!b) return;
-  tracks = tracks.filter(t => String(t.id) !== b.dataset.del); salvarLS("radar_tracks", tracks); desenharTracks(); });
-
-$("#btnLimpar").addEventListener("click", () => { eventos = []; salvarLS("radar_eventos", eventos); desenharLog(); });
-
-// ---------- leitura periódica
-let lendo = false;
-async function atualizar(){
-  if(lendo) return; lendo = true;
-  try{
-    const q = `moedas=${encodeURIComponent(cfg.moedas.join(","))}&corretoras=${encodeURIComponent(cfg.corretoras.join(","))}`;
-    dados = await api(`/api/precos?${q}`);
-    COT = dados.cotacao.valor;
-    ultimaOk = Date.now();
-    processar();
-    render();
-    if(primeiro){ primeiro = false; }
-  }catch(e){
-    if(Date.now() - ultimaOk > INTERVALO_MS * 3){
-      $("#dot").classList.remove("on");
-      $("#liveTxt").textContent = "sem resposta do servidor, tentando de novo…";
-    }
-  }finally{ lendo = false; }
+function sparkline(v, cor){
+  if(v.length < 2) return `<svg class="spark" viewBox="0 0 200 44"><text x="0" y="26">juntando leituras…</text></svg>`;
+  const lo = Math.min(...v), hi = Math.max(...v), r = (hi - lo) || 1e-6;
+  const pts = v.map((y, i) => `${(i/(v.length-1)*200).toFixed(1)},${(40 - (y-lo)/r*36).toFixed(1)}`).join(" ");
+  return `<svg class="spark" viewBox="0 0 200 44" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${cor}" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>`;
 }
-montarControles();
-desenharLog();
-desenharTracks();
-atualizar();
-setInterval(atualizar, INTERVALO_MS);
+function livroHtml(q){
+  const a = q.asks.slice(0, 6).reverse(), b = q.bids.slice(0, 6);
+  return `<div class="book"><div style="display:block;padding:0">${a.map(([p, v]) => `<div class="a"><span>${P4(p)}</span><span class="muted">${nf(v,0)}</span></div>`).join("")}</div>
+    <div style="display:block;padding:0">${b.map(([p, v]) => `<div class="b"><span>${P4(p)}</span><span class="muted">${nf(v,0)}</span></div>`).join("")}</div></div>
+    <div class="faint" style="font-size:11px">vermelho: quem vende (você compra) · verde: quem compra (você vende) · quantidade em USDT</div>`;
+}
+document.addEventListener("click", e => { const b = e.target.closest("[data-livro]"); if(!b) return; const c = b.dataset.livro; livroAberto[c] = !livroAberto[c]; renderCotacoes(); });
+
+// ---------- 02 oportunidades
+function renderOps(){
+  const valor = +$("#opValor").value || +cfg.valor;
+  const lista = valor === +cfg.valor ? rotas : calcularRotas(valor);
+  const viaveis = lista.filter(r => !motivoInviavel(r));
+  $("#nOps").hidden = !viaveis.length; $("#nOps").textContent = viaveis.length;
+  $("#opsSub").textContent = `${viaveis.length} viáveis de ${lista.length} rotas · ${cfg.modo === "transferir" ? "com transferência" : "saldo nas duas"}`;
+  const mostrar = ($("#opFiltro").value === "viaveis" ? viaveis : lista).slice(0, 24);
+  $("#ops").innerHTML = mostrar.length ? mostrar.map(r => {
+    const m = motivoInviavel(r);
+    return `<div class="card op">
+      <div class="row" style="justify-content:space-between"><span class="eyebrow">CEX → CEX</span><span class="st ${m ? (m.includes("saldo")||m.includes("falta") ? "sal" : "no") : "ok"}">${m ? (m.includes("saldo")||m.includes("falta") ? "sem saldo" : "não compensa") : "viável"}</span></div>
+      <div class="rt">USDT <span class="muted">(${nome(r.a)})</span> → BRL <span class="muted">(${nome(r.b)})</span></div>
+      <div><span class="val ${r.lucro>0?"":"bad"}">${RS(r.lucro)}</span><span class="pc ${r.lucro>0?"good":"bad"}">${pct(r.pct)}</span></div>
+      <div class="mt"><span><small>Diferença bruta</small>${pct(r.bruto)}</span><span><small>Compra</small>${P4(r.medioCompra)}</span><span><small>Venda</small>${P4(r.medioVenda)}</span></div>
+      <div class="why">${m ? esc(m) : `com ${R(r.valor)} · taxas ${R((r.taxaA+r.saque)*r.medioCompra + r.taxaB)}`}</div>
+      <button class="go" data-exec="${r.a}|${r.b}" ${emExecucao ? "disabled" : ""}>◆ Executar</button>
+    </div>`;
+  }).join("") : `<div class="empty">Sem rotas para mostrar. ${dados ? "Ative pelo menos duas corretoras em Configurações." : "Lendo preços…"}</div>`;
+}
+$("#opValor").addEventListener("change", renderOps);
+$("#opFiltro").addEventListener("change", renderOps);
+
+// ============================================================ execução (simulada)
+let confRota = null;
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-exec]"); if(!b) return;
+  const [a, c] = b.dataset.exec.split("|"); abrirConfirmar(a, c, +$("#opValor").value || +cfg.valor);
+});
+function abrirConfirmar(a, b, valor){
+  if(emExecucao){ toast("Já existe uma operação em andamento.", "acc"); return; }
+  confRota = {a, b};
+  $("#mConfRota").innerHTML = `USDT (${nome(a)}) → BRL (${nome(b)}) · ${cfg.modo === "transferir" ? "com transferência" : "saldo nas duas"}`;
+  $("#mConfValor").value = valor;
+  atualizarConfirmar();
+  $("#mConf").hidden = false; $("#mConfValor").focus();
+}
+function atualizarConfirmar(){
+  const {a, b} = confRota, v = +$("#mConfValor").value || 0;
+  const r = dados && dados.cotacoes[a] && dados.cotacoes[b] ? calcRota(a, b, v, dados.cotacoes[a], dados.cotacoes[b]) : null;
+  $("#mConfPct").textContent = r ? pct(r.pct) : "—"; $("#mConfPct").className = r && r.pct > 0 ? "good" : "bad";
+  $("#mConfLucro").textContent = r ? RS(r.lucro) : "—"; $("#mConfLucro").className = r && r.lucro > 0 ? "good" : "bad";
+  $("#mConfSaldo").textContent = `${R(sim.saldos[a].brl)} · ${nf(sim.saldos[a].usdt)} USDT`;
+  const m = r ? motivoInviavel(r) : "sem preço";
+  const bloqueia = v < 50 || sim.saldos[a].brl < v || (cfg.modo === "instantaneo" && r && sim.saldos[b].usdt < r.chega);
+  $("#mConfAviso").innerHTML = v < 50 ? `<div class="banner">Mínimo de R$ 50 por operação.</div>` : bloqueia ? `<div class="banner">${esc(m)}. Ajuste o valor ou os saldos em Configurações.</div>` : m ? `<div class="banner">${esc(m)}. Você pode executar mesmo assim para ver o resultado.</div>` : "";
+  $("#mConfGo").disabled = !!bloqueia;
+}
+$("#mConfValor").addEventListener("input", atualizarConfirmar);
+document.querySelectorAll("[data-fechar]").forEach(b => b.addEventListener("click", () => $("#mConf").hidden = true));
+$("#mConfGo").addEventListener("click", () => { $("#mConf").hidden = true; executar(confRota.a, confRota.b, +$("#mConfValor").value, false); });
+$("#mExecMin").addEventListener("click", () => { $("#mExec").hidden = true; if(emExecucao) toast("A operação continua rodando. Ela aparece no Histórico quando terminar.", "acc"); });
+
+const PASSOS_T = [
+  ["preparar","Iniciando operação…"], ["verificar preços","Lendo os livros de ofertas das duas corretoras…"], ["verificar saldo",""],
+  ["comprar cripto",""], ["endereço de depósito",""], ["saque",""], ["aguardar depósito",""], ["vender cripto",""], ["concluído",""],
+];
+const PASSOS_I = [
+  ["preparar","Iniciando operação…"], ["verificar preços","Lendo os livros de ofertas das duas corretoras…"], ["verificar saldo",""],
+  ["comprar e vender","Comprando e vendendo ao mesmo tempo…"], ["concluído",""],
+];
+async function livros(cs){
+  const r = await fetch(`/api/brl?corretoras=${cs.join(",")}&niveis=50`, {cache:"no-store"});
+  const d = await r.json(); for(const c of cs) if(!d.cotacoes[c]) throw new Error(`${nome(c)}: ${d.erros[c] || "sem resposta"}`);
+  return d.cotacoes;
+}
+async function executar(a, b, valor, eAuto, retomar){
+  if(emExecucao) return false;
+  const transf = (retomar ? retomar.modo : cfg.modo) === "transferir";
+  const passos = transf ? PASSOS_T : PASSOS_I;
+  const op = retomar || { id: Date.now(), a, b, valor, auto: eAuto, modo: cfg.modo, inicio: Date.now(), etapa: 0, desc: {} };
+  emExecucao = op; renderOps();
+  const mostrar = !eAuto;
+  $("#mExecEy").textContent = eAuto ? "Execução automática" : "Em execução";
+  $("#mExecRota").textContent = `${nome(op.a)} → ${nome(op.b)}`;
+  $("#mExecValor").textContent = R(op.valor);
+  $("#mExecRes").innerHTML = ""; $("#mExecT").textContent = "operação em andamento"; $("#mExecMin").textContent = "minimizar";
+  if(mostrar) $("#mExec").hidden = false;
+  const relogio = setInterval(() => { const s = Math.floor((Date.now()-op.inicio)/1000); $("#mExecTempo").textContent = `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`; }, 500);
+  const desenhar = (falhou) => { $("#mExecSteps").innerHTML = passos.map(([t, d], i) => {
+    const cls = i < op.etapa ? "done" : i === op.etapa ? (falhou ? "fail" : "run") : "";
+    return `<div class="step ${cls}"><span class="ic">${i < op.etapa ? "✓" : falhou && i === op.etapa ? "!" : ""}</span><div><div class="tt">${t}</div>${(op.desc[i] || (i <= op.etapa ? d : "")) ? `<div class="ds">${esc(op.desc[i] || d)}</div>` : ""}</div></div>`; }).join(""); };
+  const avancar = (txt) => { if(txt) op.desc[op.etapa] = txt; op.etapa++; gravar("mesa_exec", op); desenhar(); };
+  const S = sim.saldos;
+  try{
+    desenhar();
+    if(op.etapa === 0){ await dorme(400); avancar("Operação criada."); }
+    let liv;
+    if(op.etapa === 1){
+      liv = await livros([op.a, op.b]);
+      const r = calcRota(op.a, op.b, op.valor, liv[op.a], liv[op.b]);
+      op.previsto = r.lucro;
+      if(eAuto && r.pct < auto.minimo) throw new Error(`a diferença caiu para ${pct(r.pct)}, abaixo do mínimo`);
+      avancar(`Comprar a ${P4(r.medioCompra)} na ${nome(op.a)} e vender a ${P4(r.medioVenda)} na ${nome(op.b)}. Previsto: ${RS(r.lucro)}.`);
+      await dorme(400);
+    }
+    if(op.etapa === 2){
+      if(S[op.a].brl < op.valor) throw new Error(`saldo insuficiente na ${nome(op.a)} (${R(S[op.a].brl)})`);
+      avancar(`Saldo de ${R(S[op.a].brl)} confirmado na ${nome(op.a)}.`); await dorme(400);
+    }
+    if(op.etapa === 3){
+      liv = liv || await livros([op.a, op.b]);
+      const compra = percorrer(liv[op.a].asks, op.valor, true);
+      if(compra.faltou) throw new Error("não há ofertas suficientes para esse valor");
+      const taxa = compra.rec * (+cfg.taxas[op.a]||0)/100;
+      op.usdt = compra.rec - taxa; op.medioCompra = compra.medio; op.taxaA = taxa * compra.medio;
+      if(transf){
+        S[op.a].brl -= op.valor; S[op.a].usdt += op.usdt; salvarSim();
+        avancar(`Comprou ${U(op.usdt)} a ${P4(compra.medio)} (taxa ${R(op.taxaA)}).`);
+      }else{
+        const venda = percorrer(liv[op.b].bids, op.usdt, false);
+        if(S[op.b].usdt < op.usdt) throw new Error(`falta USDT na ${nome(op.b)} (${nf(S[op.b].usdt)})`);
+        const taxaB = venda.rec * (+cfg.taxas[op.b]||0)/100;
+        op.medioVenda = venda.medio; op.taxaB = taxaB; op.final = venda.rec - taxaB; op.saqueBrl = 0;
+        S[op.a].brl -= op.valor; S[op.a].usdt += op.usdt; S[op.b].usdt -= op.usdt; S[op.b].brl += op.final; salvarSim();
+        avancar(`Comprou ${U(op.usdt)} na ${nome(op.a)} a ${P4(compra.medio)} e vendeu na ${nome(op.b)} a ${P4(venda.medio)}.`);
+      }
+      await dorme(400);
+    }
+    if(transf){
+      if(op.etapa === 4){ avancar(`Rede ${cfg.rede[op.a] || "BEP20"} (taxa ${nf(+cfg.saque[op.a]||0)} USDT).`); await dorme(400); }
+      if(op.etapa === 5){
+        const fee = +cfg.saque[op.a] || 0; op.chega = Math.max(op.usdt - fee, 0); op.saqueBrl = fee * op.medioCompra;
+        const espera = cfg.acelerar ? 10000 : Math.max(+cfg.tempo || 0, 0) * 60000;
+        op.chegaEm = Date.now() + espera;
+        S[op.a].usdt -= op.usdt; salvarSim();
+        avancar(`Sacando ${U(op.usdt)} para a ${nome(op.b)} via ${cfg.rede[op.a] || "BEP20"}. Chegam ${U(op.chega)}.`);
+      }
+      if(op.etapa === 6){
+        while(Date.now() < op.chegaEm){ const s = Math.ceil((op.chegaEm - Date.now())/1000); op.desc[6] = `Aguardando confirmação na ${nome(op.b)}… ${s}s`; desenhar(); await dorme(1000); }
+        S[op.b].usdt += op.chega; salvarSim();
+        avancar(`${U(op.chega)} chegaram na ${nome(op.b)}.`);
+      }
+      if(op.etapa === 7){
+        const lv = await livros([op.b]);
+        const venda = percorrer(lv[op.b].bids, op.chega, false);
+        const taxaB = venda.rec * (+cfg.taxas[op.b]||0)/100;
+        op.medioVenda = venda.medio; op.taxaB = taxaB; op.final = venda.rec - taxaB;
+        S[op.b].usdt -= op.chega; S[op.b].brl += op.final; salvarSim();
+        avancar(`Vendeu a ${P4(venda.medio)} (preço de agora). Recebido: ${R(op.final)}.`);
+      }
+    }
+    // concluir
+    op.lucro = op.final - op.valor; op.pct = op.lucro/op.valor*100; op.fim = Date.now();
+    avancar(`Lucro: ${RS(op.lucro)} (${pct(op.pct)}).`);
+    sim.hist.unshift({ id: op.id, t: op.fim, a: op.a, b: op.b, valor: op.valor, usdt: op.chega ?? op.usdt, compra: op.medioCompra, venda: op.medioVenda,
+      taxas: (op.taxaA||0) + (op.saqueBrl||0) + (op.taxaB||0), lucro: op.lucro, pct: op.pct, previsto: op.previsto, auto: !!op.auto, final: op.final, modo: op.modo });
+    salvarSim();
+    $("#mExecRes").innerHTML = `<div class="result ${op.lucro < 0 ? "neg" : ""}"><div class="eyebrow">Operação concluída</div>
+      <div class="kv"><span>Investido</span><span>${R(op.valor)}</span></div><div class="kv"><span>Recebido</span><span>${R(op.final)}</span></div>
+      <div class="kv"><span>Previsto na entrada</span><span>${RS(op.previsto || 0)}</span></div>
+      <div class="kv"><span>Resultado</span><span class="${op.lucro >= 0 ? "good" : "bad"}">${RS(op.lucro)} (${pct(op.pct)})</span></div></div>`;
+    $("#mExecEy").textContent = "Concluída"; $("#mExecT").textContent = "operação concluída"; $("#mExecMin").textContent = "fechar";
+    toast(`${op.auto ? "Robô: " : ""}${nome(op.a)} → ${nome(op.b)} concluída: ${RS(op.lucro)}`, op.lucro >= 0 ? "" : "bad");
+    registrarLog(`${op.auto ? "Robô concluiu" : "Operação manual concluída"}: ${nome(op.a)} → ${nome(op.b)} · ${RS(op.lucro)} (${pct(op.pct)})`, op.lucro >= 0 ? "good" : "bad");
+    return true;
+  }catch(err){
+    op.desc[op.etapa] = "Falhou: " + err.message; desenhar(true);
+    // devolve o que estava no meio do caminho para não sumir dinheiro virtual
+    if(transf && op.etapa === 6 && op.chega){ S[op.b].usdt += op.chega; salvarSim(); }
+    $("#mExecRes").innerHTML = `<div class="result neg"><div class="eyebrow">Operação interrompida</div><div style="font-size:13px;margin-top:4px">${esc(err.message)}</div></div>`;
+    $("#mExecEy").textContent = "Interrompida";
+    registrarLog(`${op.auto ? "Robô" : "Operação"} interrompida (${nome(op.a)} → ${nome(op.b)}): ${err.message}`, "warn");
+    if(!eAuto) toast("Operação interrompida: " + err.message, "bad");
+    return false;
+  }finally{
+    clearInterval(relogio);
+    try{ localStorage.removeItem("mesa_exec"); }catch(e){}
+    emExecucao = null; renderOps(); renderStrip();
+    if(paginaAtual() === "historico") renderHistorico();
+  }
+}
+// retoma operação que estava no meio quando a página fechou
+function retomarPendente(){
+  const op = ler("mesa_exec", null);
+  if(op && op.etapa > 0 && op.etapa < 9){ toast("Retomando a operação que estava em andamento.", "acc"); executar(op.a, op.b, op.valor, op.auto, op); }
+}
+
+// ============================================================ 03 autobot
+function registrarLog(txt, tipo=""){ sim.log.unshift({t: Date.now(), txt, tipo}); sim.log = sim.log.slice(0, 120); salvarSim(); if(paginaAtual() === "autobot") renderLog(); }
+function renderLog(){
+  $("#autoLog").innerHTML = sim.log.length ? sim.log.map(l => `<div><span class="h">${hora(l.t)}</span><span class="${l.tipo}">${esc(l.txt)}</span></div>`).join("") : `<div class="empty">Nada por aqui ainda.</div>`;
+}
+let autoForm = null;
+function renderAutobot(form = true){
+  if(form || !autoForm){
+    autoForm = clone(auto);
+    $("#autoMax").value = autoForm.max;
+  }
+  $("#autoTg").classList.toggle("on", auto.on);
+  $("#autoSt").textContent = auto.on ? "ativo" : "desligado"; $("#autoSt").className = "eyebrow " + (auto.on ? "good" : "");
+  $("#autoEx").innerHTML = cfg.corretoras.map(c => `<button class="chip ${autoForm.corretoras.includes(c) ? "on" : ""}" data-aex="${c}">${nome(c)}</button>`).join("");
+  $("#autoMin").innerHTML = MINIMOS.map(v => `<button class="chip acc ${autoForm.minimo === v ? "on" : ""}" data-amin="${v}">${nf(v, v < 1 ? 1 : 0)}%</button>`).join("");
+  $("#autoInt").innerHTML = INTERVALOS.map(v => `<button class="chip acc ${autoForm.intervalo === v ? "on" : ""}" data-aint="${v}">${v} min</button>`).join("");
+  const autos = sim.hist.filter(h => h.auto);
+  $("#autoUlt").textContent = autos[0] ? `${dataHora(autos[0].t)} · ${RS(autos[0].lucro)}` : "—";
+  const hoje = new Date().toDateString();
+  $("#autoHoje").textContent = autos.filter(h => new Date(h.t).toDateString() === hoje).length;
+  renderLog();
+}
+document.addEventListener("click", e => {
+  const x = e.target.closest("[data-aex],[data-amin],[data-aint]"); if(!x || !autoForm) return;
+  if(x.dataset.aex){ const c = x.dataset.aex; autoForm.corretoras = autoForm.corretoras.includes(c) ? autoForm.corretoras.filter(y => y !== c) : [...autoForm.corretoras, c]; }
+  if(x.dataset.amin) autoForm.minimo = +x.dataset.amin;
+  if(x.dataset.aint) autoForm.intervalo = +x.dataset.aint;
+  renderAutobot(false);
+});
+function salvarAuto(){
+  autoForm.max = Math.max(+$("#autoMax").value || 0, 50);
+  Object.assign(auto, {corretoras: autoForm.corretoras, minimo: autoForm.minimo, intervalo: autoForm.intervalo, max: autoForm.max});
+  gravar("mesa_auto", auto);
+}
+$("#autoSalvar").addEventListener("click", () => { salvarAuto(); toast(`Configurações salvas: mínimo ${nf(auto.minimo)}%, máximo ${R(auto.max)}, intervalo ${auto.intervalo} min`); renderAutobot(); });
+$("#autoTg").addEventListener("click", () => {
+  salvarAuto();
+  if(!auto.on && auto.corretoras.length < 2){ toast("Escolha pelo menos duas corretoras.", "bad"); return; }
+  auto.on = !auto.on; gravar("mesa_auto", auto);
+  registrarLog(auto.on ? `Robô ligado: mínimo ${nf(auto.minimo)}%, máximo ${R(auto.max)}, intervalo ${auto.intervalo} min` : "Robô desligado", auto.on ? "good" : "");
+  toast(auto.on ? "Modo autônomo ativado" : "Modo autônomo desligado", auto.on ? "" : "acc");
+  renderAutobot(false);
+});
+$("#autoLimpar").addEventListener("click", () => { sim.log = []; salvarSim(); renderLog(); });
+let ultimoAviso = 0;
+async function rodarAutobot(){
+  if(!auto.on || emExecucao || !dados) return;
+  const espera = auto.intervalo*60000 - (Date.now() - (auto.ultima || 0));
+  let melhor = null;
+  for(const a of auto.corretoras) for(const b of auto.corretoras){
+    if(a === b || !dados.cotacoes[a] || !dados.cotacoes[b]) continue;
+    const v = Math.min(auto.max, Math.floor(sim.saldos[a].brl));
+    if(v < 50) continue;
+    const r = calcRota(a, b, v, dados.cotacoes[a], dados.cotacoes[b]);
+    if(r.faltou || (cfg.modo === "instantaneo" && sim.saldos[b].usdt < r.chega)) continue;
+    if(!melhor || r.pct > melhor.pct) melhor = r;
+  }
+  if(!melhor) return;
+  if(melhor.pct < auto.minimo){
+    if(Date.now() - ultimoAviso > 30000){ ultimoAviso = Date.now(); registrarLog(`Procurando… melhor agora ${nome(melhor.a)} → ${nome(melhor.b)} ${pct(melhor.pct)} (abaixo de ${nf(auto.minimo)}%)`, "faint"); }
+    return;
+  }
+  if(espera > 0){
+    if(Date.now() - ultimoAviso > 15000){ ultimoAviso = Date.now(); registrarLog(`Aguardando intervalo (${Math.ceil(espera/1000)}s) · oportunidade ${nome(melhor.a)} → ${nome(melhor.b)} ${pct(melhor.pct)}`, "warn"); }
+    return;
+  }
+  auto.ultima = Date.now(); gravar("mesa_auto", auto);
+  registrarLog(`Executando: ${nome(melhor.a)} → ${nome(melhor.b)} com ${R(melhor.valor)} · previsto ${RS(melhor.lucro)} (${pct(melhor.pct)})`, "acc");
+  executar(melhor.a, melhor.b, melhor.valor, true);
+}
+
+// ============================================================ 04 performance
+function filtrados(){ return periodo ? sim.hist.filter(h => Date.now() - h.t <= periodo*86400000) : sim.hist; }
+function renderPerformance(){
+  const h = filtrados();
+  const lucro = h.reduce((s, x) => s + x.lucro, 0), vol = h.reduce((s, x) => s + x.valor, 0);
+  const hoje = new Date().toDateString(), hh = sim.hist.filter(x => new Date(x.t).toDateString() === hoje);
+  const porRota = {};
+  for(const x of h){ const k = `${x.a}|${x.b}`; (porRota[k] = porRota[k] || {lucro:0, n:0, vol:0}); porRota[k].lucro += x.lucro; porRota[k].n++; porRota[k].vol += x.valor; }
+  const rotasOrd = Object.entries(porRota).sort((a, b) => b[1].lucro - a[1].lucro);
+  const melhor = h.length ? h.reduce((m, x) => x.lucro > m.lucro ? x : m) : null, pior = h.length ? h.reduce((m, x) => x.lucro < m.lucro ? x : m) : null;
+  const vencedoras = h.filter(x => x.lucro > 0).length;
+  const k = (t, v, s, cls="") => `<div class="card kpi"><div class="eyebrow">${t}</div><div class="big ${cls}">${v}</div><div class="s">${s}</div></div>`;
+  $("#kpis").innerHTML = [
+    k("Lucro líquido", RS(lucro), `${h.length} operações`, lucro >= 0 ? "good" : "bad"),
+    k("Diferença média líquida", h.length ? pct(lucro/vol*100) : "—", `sobre ${R(vol)} operados`, lucro >= 0 ? "good" : "bad"),
+    k("Lucro hoje", RS(hh.reduce((s, x) => s + x.lucro, 0)), `${hh.length} operações hoje`, hh.reduce((s, x) => s + x.lucro, 0) >= 0 ? "good" : "bad"),
+    k("Volume operado", R(vol), h.length ? `média ${R(vol/h.length)} por operação` : "—"),
+    k("Melhor rota", rotasOrd[0] ? `${nome(rotasOrd[0][0].split("|")[0])} → ${nome(rotasOrd[0][0].split("|")[1])}` : "—", rotasOrd[0] ? `${RS(rotasOrd[0][1].lucro)} em ${rotasOrd[0][1].n} operações` : "", "acc"),
+    k("Melhor / pior operação", melhor ? `<span class="good">${RS(melhor.lucro)}</span> <span class="faint">/</span> <span class="${pior.lucro<0?"bad":"good"}">${RS(pior.lucro)}</span>` : "—", h.length ? `${vencedoras} de ${h.length} com lucro` : ""),
+  ].join("");
+  // lucro acumulado
+  const ordem = [...h].sort((a, b) => a.t - b.t); let acc = 0; const pts = ordem.map(x => [x.t, acc += x.lucro]);
+  $("#chPnl").innerHTML = pts.length < 2 ? `<div class="empty">Faça pelo menos duas operações para ver o gráfico.</div>` : grafLinha(pts);
+  // volume por dia
+  const dias = {}; for(const x of h){ const d = new Date(x.t); const key = d.toISOString().slice(0,10); dias[key] = (dias[key]||0) + x.valor; }
+  const dv = Object.entries(dias).sort().slice(-14);
+  $("#chVol").innerHTML = dv.length ? grafBarras(dv) : `<div class="empty">Sem operações no período.</div>`;
+  const maxL = Math.max(...rotasOrd.map(([, v]) => Math.abs(v.lucro)), 1);
+  $("#rank").innerHTML = rotasOrd.length ? rotasOrd.map(([k, v]) => { const [a, b] = k.split("|");
+    return `<div><span>${nome(a)} → ${nome(b)} <span class="faint">· ${v.n} op · ${R(v.vol)}</span></span><span class="${v.lucro>=0?"good":"bad"}">${RS(v.lucro)}</span><span class="bar"><i style="width:${Math.abs(v.lucro)/maxL*100}%;background:${v.lucro>=0?"var(--good)":"var(--bad)"}"></i></span></div>`; }).join("")
+    : `<div class="empty" style="display:block">Sem operações ainda. Execute uma oportunidade ou ligue o Autobot.</div>`;
+}
+function grafLinha(pts){
+  const W = 560, H = 200, pl = 56, pr = 12, pt = 12, pb = 24;
+  const ys = pts.map(p => p[1]); let lo = Math.min(0, ...ys), hi = Math.max(0, ...ys); if(hi === lo) hi = lo + 1;
+  const t0 = pts[0][0], t1 = pts[pts.length-1][0];
+  const X = t => pl + (t - t0)/((t1 - t0) || 1)*(W - pl - pr), Y = v => pt + (hi - v)/(hi - lo)*(H - pt - pb);
+  const linha = pts.map(p => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(" ");
+  const fim = pts[pts.length-1], cor = fim[1] >= 0 ? "var(--good)" : "var(--bad)";
+  const ticks = [hi, (hi+lo)/2, lo];
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Lucro acumulado">
+    ${ticks.map(v => `<line x1="${pl}" x2="${W-pr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--rule)"/><text x="${pl-6}" y="${Y(v)+3}" text-anchor="end">${nf(v,0)}</text>`).join("")}
+    <line x1="${pl}" x2="${W-pr}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--rule2)" stroke-dasharray="3 3"/>
+    <polygon points="${X(t0)},${Y(0)} ${linha} ${X(t1)},${Y(0)}" fill="${cor}" opacity=".12"/>
+    <polyline points="${linha}" fill="none" stroke="${cor}" stroke-width="2"/>
+    <circle cx="${X(fim[0])}" cy="${Y(fim[1])}" r="4" fill="${cor}"/>
+    <text x="${pl}" y="${H-6}">${dataHora(t0)}</text><text x="${W-pr}" y="${H-6}" text-anchor="end">${dataHora(t1)}</text></svg>`;
+}
+function grafBarras(dv){
+  const W = 560, H = 200, pl = 56, pr = 12, pt = 12, pb = 24, mx = Math.max(...dv.map(d => d[1]));
+  const bw = Math.min((W - pl - pr)/dv.length, 70);
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Volume por dia">
+    ${[mx, mx/2].map(v => `<line x1="${pl}" x2="${W-pr}" y1="${pt + (1 - v/mx)*(H-pt-pb)}" y2="${pt + (1 - v/mx)*(H-pt-pb)}" stroke="var(--rule)"/><text x="${pl-6}" y="${pt + (1 - v/mx)*(H-pt-pb)+3}" text-anchor="end">${nf(v/1000,0)} mil</text>`).join("")}
+    ${dv.map(([d, v], i) => { const h = v/mx*(H-pt-pb); return `<rect x="${pl + i*bw + bw*0.15}" y="${H-pb-h}" width="${bw*0.7}" height="${h}" rx="3" fill="var(--accent)" opacity=".85"/><text x="${pl + i*bw + bw/2}" y="${H-6}" text-anchor="middle">${d.slice(8,10)}/${d.slice(5,7)}</text>`; }).join("")}
+  </svg>`;
+}
+document.querySelectorAll("#per button").forEach(b => b.addEventListener("click", () => { periodo = +b.dataset.p; document.querySelectorAll("#per button").forEach(x => x.classList.toggle("on", x === b)); renderPerformance(); }));
+
+// ============================================================ 05 histórico
+function renderHistorico(){
+  const h = sim.hist, tot = Math.max(1, Math.ceil(h.length/POR_PAG)); pagHist = Math.min(pagHist, tot-1);
+  $("#hCount").textContent = `${h.length} operações`;
+  $("#hBody").innerHTML = h.length ? h.slice(pagHist*POR_PAG, (pagHist+1)*POR_PAG).map(x => `<tr>
+    <td class="num">${dataHora(x.t)}</td><td>${logoP(x.a)} ${nome(x.a)} → ${logoP(x.b)} ${nome(x.b)}</td>
+    <td class="r num">${R(x.valor)}</td><td class="r num">${nf(x.usdt)}</td><td class="r num">${P4(x.compra)}</td><td class="r num">${P4(x.venda)}</td>
+    <td class="r num ${x.lucro>=0?"good":"bad"}">${RS(x.lucro)}</td><td class="r num ${x.lucro>=0?"good":"bad"}">${pct(x.pct, 2)}</td>
+    <td><span class="tg ${x.lucro>=0?"ok":"bad"}">${x.lucro>=0?"OK":"PERDA"}</span> ${x.auto ? `<span class="tg auto">AUTO</span>` : ""}</td></tr>`).join("")
+    : `<tr><td colspan="9" class="empty">Nenhuma operação ainda.</td></tr>`;
+  $("#hPag").textContent = `página ${pagHist+1} de ${tot}`;
+  $("#hPrev").disabled = pagHist === 0; $("#hNext").disabled = pagHist >= tot-1;
+}
+$("#hPrev").addEventListener("click", () => { pagHist--; renderHistorico(); });
+$("#hNext").addEventListener("click", () => { pagHist++; renderHistorico(); });
+$("#hCsv").addEventListener("click", () => {
+  const linhas = [["data","compra_em","venda_em","valor_brl","usdt","preco_compra","preco_venda","taxas_brl","lucro_brl","lucro_pct","automatica"]]
+    .concat(sim.hist.map(x => [new Date(x.t).toISOString(), nome(x.a), nome(x.b), x.valor.toFixed(2), x.usdt.toFixed(4), x.compra.toFixed(4), x.venda.toFixed(4), (x.taxas||0).toFixed(2), x.lucro.toFixed(2), x.pct.toFixed(4), x.auto ? "sim" : "nao"]));
+  const blob = new Blob([linhas.map(l => l.join(";")).join("\n")], {type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "historico-arbitragem.csv"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+});
+
+// ============================================================ 06 impostos
+function renderImpostos(){
+  const meses = [...new Set(sim.hist.map(x => new Date(x.t).toISOString().slice(0,7)))].sort().reverse();
+  const atual = new Date().toISOString().slice(0,7); if(!meses.includes(atual)) meses.unshift(atual);
+  const sel = $("#tMes"), antes = sel.value;
+  sel.innerHTML = meses.map(m => `<option value="${m}">${new Date(m+"-15").toLocaleDateString("pt-BR",{month:"long",year:"numeric"})}</option>`).join("");
+  sel.value = meses.includes(antes) ? antes : meses[0];
+  const ops = sim.hist.filter(x => new Date(x.t).toISOString().slice(0,7) === sel.value);
+  const nac = ops.filter(x => cfg.nacional[x.b]), ext = ops.filter(x => !cfg.nacional[x.b]);
+  const vendasNac = nac.reduce((s, x) => s + x.final, 0), lucroNac = nac.reduce((s, x) => s + x.lucro, 0);
+  const lucroExt = ext.reduce((s, x) => s + x.lucro, 0), vendasExt = ext.reduce((s, x) => s + x.final, 0);
+  const isento = vendasNac <= 35000, impNac = isento ? 0 : Math.max(lucroNac, 0)*0.15, impExt = Math.max(lucroExt, 0)*0.15;
+  const k = (t, v, s, cls="", extra="") => `<div class="card kpi ${extra}"><div class="eyebrow">${t}</div><div class="big ${cls}">${v}</div><div class="s">${s}</div></div>`;
+  $("#tax").innerHTML = [
+    k("Nacional · vendas no mês", R(vendasNac), isento ? "dentro da isenção de R$ 35 mil" : "passou de R$ 35 mil: o ganho é tributado", isento ? "" : "warn"),
+    k("Nacional · margem até a isenção", R(Math.max(35000 - vendasNac, 0)), "quanto ainda pode vender no mês sem imposto"),
+    k("Nacional · imposto estimado", R(impNac), `15% sobre ganho de ${R(Math.max(lucroNac,0))}`, impNac ? "bad" : "good"),
+    k("Exterior · volume vendido", R(vendasExt), "sem isenção de R$ 35 mil", "", ""),
+    k("Exterior · ganho no mês", RS(lucroExt), "entra na declaração anual", lucroExt >= 0 ? "good" : "bad"),
+    k("Exterior · imposto estimado", R(impExt), "15% sobre o ganho, apurado no ano", impExt ? "bad" : "good", impExt ? "tax" : ""),
+  ].join("");
+}
+$("#tMes").addEventListener("change", renderImpostos);
+
+// ============================================================ 07 configurações
+function renderConfig(){
+  $("#cfValor").value = cfg.valor; $("#cfMin").value = cfg.minimo; $("#cfModo").value = cfg.modo;
+  $("#cfTempo").value = cfg.tempo; $("#cfAcelerar").checked = !!cfg.acelerar;
+  $("#cfIniBrl").value = cfg.iniBrl; $("#cfIniUsdt").value = cfg.iniUsdt;
+  $("#cfEx").innerHTML = Object.keys(EX).map(c => `<div class="fx">
+    <b>${nome(c)}</b>
+    <label class="chk"><input type="checkbox" data-on="${c}" ${cfg.corretoras.includes(c) ? "checked" : ""}> usar esta corretora</label>
+    <label>Taxa negociação %<input type="number" step="0.01" min="0" class="num" data-tx="${c}" value="${cfg.taxas[c]}"></label>
+    <label>Saque USDT<input type="number" step="any" min="0" class="num" data-sq="${c}" value="${cfg.saque[c]}"></label>
+    <label>Rede<input data-rd="${c}" value="${esc(cfg.rede[c] || "")}"></label>
+    <label class="chk" style="grid-column:auto"><input type="checkbox" data-nc="${c}" ${cfg.nacional[c] ? "checked" : ""}> nacional</label>
+  </div>`).join("");
+}
+$("#cfSalvar").addEventListener("click", () => {
+  const novo = clone(cfg);
+  novo.valor = Math.max(+$("#cfValor").value || 5000, 50); novo.minimo = +$("#cfMin").value || 0; novo.modo = $("#cfModo").value;
+  novo.tempo = Math.min(Math.max(+$("#cfTempo").value || 0, 0), 60); novo.acelerar = $("#cfAcelerar").checked;
+  novo.iniBrl = Math.max(+$("#cfIniBrl").value || 0, 0); novo.iniUsdt = Math.max(+$("#cfIniUsdt").value || 0, 0);
+  novo.corretoras = Object.keys(EX).filter(c => document.querySelector(`[data-on="${c}"]`).checked);
+  document.querySelectorAll("[data-tx]").forEach(i => novo.taxas[i.dataset.tx] = Math.max(+i.value || 0, 0));
+  document.querySelectorAll("[data-sq]").forEach(i => novo.saque[i.dataset.sq] = Math.max(+i.value || 0, 0));
+  document.querySelectorAll("[data-rd]").forEach(i => novo.rede[i.dataset.rd] = i.value.trim());
+  document.querySelectorAll("[data-nc]").forEach(i => novo.nacional[i.dataset.nc] = i.checked);
+  if(novo.corretoras.length < 2){ $("#cfMsg").textContent = "Escolha pelo menos duas corretoras."; return; }
+  cfg = novo; gravar("mesa_cfg", cfg);
+  auto.corretoras = auto.corretoras.filter(c => cfg.corretoras.includes(c)); gravar("mesa_auto", auto);
+  $("#opValor").value = cfg.valor;
+  $("#cfMsg").textContent = "Salvo. Os saldos iniciais só valem depois de zerar o simulador.";
+  toast("Configurações salvas"); ler_precos();
+});
+let confirmaZerar = 0;
+$("#cfReset").addEventListener("click", () => {
+  if(Date.now() - confirmaZerar > 4000){ confirmaZerar = Date.now(); $("#cfReset").textContent = "Clique de novo para confirmar"; setTimeout(() => $("#cfReset").textContent = "Zerar simulador", 4000); return; }
+  sim = { saldos: saldosIniciais(), hist: [], log: [], criado: Date.now() }; salvarSim();
+  auto.on = false; gravar("mesa_auto", auto);
+  $("#cfReset").textContent = "Zerar simulador"; $("#cfMsg").textContent = "Simulador zerado com os saldos iniciais.";
+  toast("Simulador zerado"); renderStrip(); if(dados) renderTudo();
+});
+
+// ============================================================ navegação
+const PAGINAS = ["cotacoes","oportunidades","autobot","performance","historico","impostos","config","guia"];
+function paginaAtual(){ const h = location.hash.slice(1); return PAGINAS.includes(h) ? h : "cotacoes"; }
+function irPara(){
+  const p = paginaAtual();
+  document.querySelectorAll(".pg").forEach(s => s.classList.toggle("on", s.id === "pg-" + p));
+  document.querySelectorAll("#nav a").forEach(a => a.classList.toggle("on", a.dataset.pg === p));
+  if(p === "autobot") renderAutobot(true);
+  if(p === "performance") renderPerformance();
+  if(p === "historico") renderHistorico();
+  if(p === "impostos") renderImpostos();
+  if(p === "config") renderConfig();
+  if(dados && (p === "cotacoes" || p === "oportunidades")) renderTudo();
+}
+window.addEventListener("hashchange", irPara);
+
+function saudacao(){ const h = new Date().getHours(); $("#saud").textContent = h < 12 ? "Bom dia." : h < 18 ? "Boa tarde." : "Boa noite."; }
+setInterval(() => { $("#relogio").textContent = new Date().toLocaleTimeString("pt-BR"); }, 1000);
+
+// ============================================================ início
+$("#opValor").value = cfg.valor;
+saudacao(); irPara(); renderStrip();
+ler_precos(); setInterval(ler_precos, POLL_MS);
+setTimeout(retomarPendente, 1500);
 </script>
 </body>
 </html>

@@ -1,10 +1,11 @@
-# Radar de Arbitragem
+# Mesa de Arbitragem (simulador)
 
-Painel que compara ao vivo o preço de criptomoedas em 9 corretoras (Binance, Bitget, Bybit, KuCoin, Gate.io, MEXC, OKX, BingX, CoinEx), já descontando taxas, com valores em reais.
+Simulador de arbitragem de USDT/BRL entre corretoras brasileiras e internacionais, com preços reais ao vivo e dinheiro virtual.
 
-- `index.html` — o painel (sinais, simulador, operações em andamento)
-- `api/precos.js` — lê o melhor preço de compra e venda em cada corretora + cotação do dólar
-- `api/livro.js` — lê o livro de ofertas para o simulador
-- `vercel.json` — roda as funções no servidor de São Paulo (`gru1`), porque Binance, Bybit e OKX bloqueiam servidores dos EUA
+- `index.html` — a mesa: cotações, oportunidades com execução passo a passo, robô automático, performance, histórico, impostos e configurações (tudo salvo no navegador)
+- `radar.html` — radar de diferenças de outras moedas (BTC, ETH, SOL…) contra USDT
+- `api/brl.js` — livro de ofertas de USDT/BRL em Binance, Bitget, Bybit, KuCoin, Mercado Bitcoin, Bitso, NovaDAX e Foxbit
+- `api/precos.js`, `api/livro.js` — dados do radar de moedas
+- `vercel.json` — funções no servidor de São Paulo (`gru1`)
 
-Só lê preços públicos. Não usa chave de API e não faz ordens. Não é recomendação de investimento.
+Só lê dados públicos. Não usa chave de API, não faz ordens e não move dinheiro. Não é recomendação de investimento.
