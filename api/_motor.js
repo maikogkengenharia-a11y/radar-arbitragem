@@ -42,7 +42,8 @@ export async function alterar(fn) {
     // na última tentativa grava sem a checagem de versão, para nunca travar o robô
     try { await salvarEstado(e, i < 3 ? etag : null); return out; }
     catch (err) {
-      if (String(err && (err.name || err.message)).includes("Precondition")) { await new Promise(r => setTimeout(r, 300 + i * 400)); continue; }
+      const txt = String(err && (err.name + " " + err.message));
+      if (/Precondition|ETag/i.test(txt)) { await new Promise(r => setTimeout(r, 150 + i * 250)); continue; }
       throw err;
     }
   }
