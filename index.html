@@ -349,7 +349,8 @@ svg text{fill:var(--muted);font:10px var(--mono)}
         <div class="grid g2">
           <div style="display:flex;flex-direction:column;gap:8px"><div class="eyebrow">Corretoras ativas</div><div class="chips" id="autoEx"></div></div>
           <div style="display:flex;flex-direction:column;gap:8px"><div class="eyebrow">Lucro líquido mínimo</div><div class="chips" id="autoMin"></div></div>
-          <label class="f"><span class="eyebrow">Valor máximo por operação (R$)</span><input id="autoMax" type="number" min="50" step="100" class="num"></label>
+          <div style="display:flex;flex-direction:column;gap:8px"><label class="f"><span class="eyebrow">Valor máximo por operação (R$)</span><input id="autoMax" type="number" min="50" step="100" class="num"></label>
+            <label class="f" style="flex-direction:row;align-items:center;gap:8px;color:var(--fg)"><input type="checkbox" id="autoRebal"> Levar os reais sozinho para a corretora de compra (Pix simulado)</label></div>
           <div style="display:flex;flex-direction:column;gap:8px"><div class="eyebrow">Intervalo entre operações</div><div class="chips" id="autoInt"></div></div>
         </div>
         <div class="row" style="justify-content:space-between">
@@ -560,8 +561,8 @@ const PADRAO = {
   valor: 5000, minimo: 0.10, modo: "transferir", tempo: 3, acelerar: true,
   iniBrl: 0, iniUsdt: 0,
 };
-const AUTO_PADRAO = { on:false, corretoras:["binance","bitget","bybit","mercadobitcoin","bitso","foxbit","avenia","chainless","picnic","polygon"], minimo:0.3, max:5000, intervalo:1, ultima:0 };
-const MINIMOS = [0.1,0.2,0.3,0.5,1,2], INTERVALOS = [1,2,3,5,10], POLL_MS = 4000, POR_PAG = 20;
+const AUTO_PADRAO = { on:false, rebal:true, corretoras:["binance","bitget","bybit","mercadobitcoin","bitso","foxbit","avenia","chainless","picnic","polygon"], minimo:0.3, max:5000, intervalo:1, ultima:0 };
+const MINIMOS = [0.05,0.1,0.2,0.3,0.5,1], INTERVALOS = [1,2,3,5,10], POLL_MS = 4000, POR_PAG = 20;
 
 // ============================================================ estado
 const ler = (k, d) => { try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } };
@@ -855,10 +856,36 @@ function atualizarConfirmar(){
   $("#mConfSaldo").textContent = `${R(sim.saldos[a].brl)} · ${nf(sim.saldos[a].usdt)} USDT`;
   const m = r ? motivoInviavel(r) : "sem preço";
   const bloqueia = v < 50 || sim.saldos[a].brl < v || (cfg.modo === "instantaneo" && r && sim.saldos[b].usdt < r.chega);
-  $("#mConfAviso").innerHTML = v < 50 ? `<div class="banner">Mínimo de R$ 50 por operação.</div>` : bloqueia ? `<div class="banner">${esc(m)}. Ajuste o valor ou os saldos em Configurações.</div>` : m ? `<div class="banner">${esc(m)}. Você pode executar mesmo assim para ver o resultado.</div>` : "";
+  let aviso = "";
+  if(v < 50) aviso = `<div class="banner">Mínimo de R$ 50 por operação.</div>`;
+  else if(sim.saldos[a].brl < v){
+    const falta = v - sim.saldos[a].brl;
+    const onde = Object.keys(EX).filter(c => c !== a && sim.saldos[c].brl >= 1).sort((x, y) => sim.saldos[y].brl - sim.saldos[x].brl);
+    const totalFora = onde.reduce((t, c) => t + sim.saldos[c].brl, 0);
+    aviso = `<div class="banner">Faltam ${R(falta)} em reais na ${nome(a)}.${onde.length ? ` Seu dinheiro está em: ${onde.slice(0,3).map(c => `${nome(c)} (${R(sim.saldos[c].brl)})`).join(", ")}.` : ""}</div>
+      <div class="row">${totalFora >= falta ? `<button class="go sm sell" id="mConfPix">Trazer ${R(falta)} por Pix (simulado)</button>` : ""}
+      <button class="go sm" id="mConfDep">Colocar ${R(falta)} na ${nome(a)}</button></div>`;
+  }
+  else if(bloqueia) aviso = `<div class="banner">${esc(m)}. Ajuste o valor ou coloque USDT na ${nome(b)}.</div>`;
+  else if(m) aviso = `<div class="banner">${esc(m)}. Você pode executar mesmo assim para ver o resultado.</div>`;
+  $("#mConfAviso").innerHTML = aviso;
   $("#mConfGo").disabled = !!bloqueia;
 }
 $("#mConfValor").addEventListener("input", atualizarConfirmar);
+// move reais de outras corretoras para 'para' (Pix simulado); devolve quanto conseguiu mover
+function puxarReais(para, quanto){
+  let falta = quanto, movido = 0;
+  const de = Object.keys(EX).filter(c => c !== para && sim.saldos[c].brl > 0).sort((x, y) => sim.saldos[y].brl - sim.saldos[x].brl);
+  for(const c of de){ if(falta <= 0.004) break; const m = Math.min(falta, sim.saldos[c].brl); sim.saldos[c].brl -= m; sim.saldos[para].brl += m; falta -= m; movido += m; }
+  salvarSim(); return movido;
+}
+document.addEventListener("click", e => {
+  if(e.target.closest("#mConfPix")){ const {a} = confRota, v = +$("#mConfValor").value || 0; const mv = puxarReais(a, v - sim.saldos[a].brl);
+    registrarLog(`Pix simulado: ${R(mv)} levados para a ${nome(a)}`, "acc"); toast(`${R(mv)} transferidos para a ${nome(a)} (Pix simulado)`, "acc"); renderStrip(); atualizarConfirmar(); }
+  if(e.target.closest("#mConfDep")){ const {a} = confRota, v = +$("#mConfValor").value || 0, falta = v - sim.saldos[a].brl;
+    sim.saldos[a].brl += falta; sim.aportes = (sim.aportes || 0) + falta; salvarSim();
+    registrarLog(`Saldo colocado: ${R(falta)} na ${nome(a)}`, "acc"); toast(`${R(falta)} colocados na ${nome(a)}`); renderStrip(); atualizarConfirmar(); }
+});
 document.querySelectorAll("[data-fechar]").forEach(b => b.addEventListener("click", () => $("#mConf").hidden = true));
 function pedirNotificacao(){ try{ if("Notification" in window && Notification.permission === "default") Notification.requestPermission(); }catch(e){} }
 function notificar(titulo, corpo){ try{ if("Notification" in window && Notification.permission === "granted" && document.hidden) new Notification(titulo, {body: corpo}); }catch(e){} }
@@ -1000,12 +1027,12 @@ let autoForm = null;
 function renderAutobot(form = true){
   if(form || !autoForm){
     autoForm = clone(auto);
-    $("#autoMax").value = autoForm.max;
+    $("#autoMax").value = autoForm.max; $("#autoRebal").checked = auto.rebal !== false;
   }
   $("#autoTg").classList.toggle("on", auto.on);
   $("#autoSt").textContent = auto.on ? "ativo" : "desligado"; $("#autoSt").className = "eyebrow " + (auto.on ? "good" : "");
   $("#autoEx").innerHTML = cfg.corretoras.map(c => `<button class="chip ${autoForm.corretoras.includes(c) ? "on" : ""}" data-aex="${c}">${nome(c)}</button>`).join("");
-  $("#autoMin").innerHTML = MINIMOS.map(v => `<button class="chip acc ${autoForm.minimo === v ? "on" : ""}" data-amin="${v}">${nf(v, v < 1 ? 1 : 0)}%</button>`).join("");
+  $("#autoMin").innerHTML = MINIMOS.map(v => `<button class="chip acc ${autoForm.minimo === v ? "on" : ""}" data-amin="${v}">${nf(v, v < 0.1 ? 2 : v < 1 ? 1 : 0)}%</button>`).join("");
   $("#autoInt").innerHTML = INTERVALOS.map(v => `<button class="chip acc ${autoForm.intervalo === v ? "on" : ""}" data-aint="${v}">${v} min</button>`).join("");
   const autos = sim.hist.filter(h => h.auto);
   $("#autoUlt").textContent = autos[0] ? `${dataHora(autos[0].t)} · ${RS(autos[0].lucro)}` : "—";
@@ -1022,7 +1049,7 @@ document.addEventListener("click", e => {
 });
 function salvarAuto(){
   autoForm.max = Math.max(+$("#autoMax").value || 0, 50);
-  Object.assign(auto, {corretoras: autoForm.corretoras, minimo: autoForm.minimo, intervalo: autoForm.intervalo, max: autoForm.max});
+  Object.assign(auto, {corretoras: autoForm.corretoras, minimo: autoForm.minimo, intervalo: autoForm.intervalo, max: autoForm.max, rebal: $("#autoRebal").checked});
   gravar("mesa_auto", auto);
 }
 $("#autoSalvar").addEventListener("click", () => { salvarAuto(); toast(`Configurações salvas: mínimo ${nf(auto.minimo)}%, máximo ${R(auto.max)}, intervalo ${auto.intervalo} min`); renderAutobot(); });
@@ -1040,17 +1067,26 @@ async function rodarAutobot(){
   if(!auto.on || emExecucao || !dados) return;
   const espera = auto.intervalo*60000 - (Date.now() - (auto.ultima || 0));
   let melhor = null;
-  for(const a of auto.corretoras) for(const b of auto.corretoras){
-    if(a === b || !dados.cotacoes[a] || !dados.cotacoes[b]) continue;
-    const v = Math.min(auto.max, Math.floor(sim.saldos[a].brl));
+  const ativas = auto.corretoras.filter(c => dados.cotacoes[c]);
+  const totalBrl = Object.keys(EX).reduce((t, c) => t + sim.saldos[c].brl, 0);
+  if(totalBrl < 50){
+    if(Date.now() - ultimoAviso > 30000){ ultimoAviso = Date.now(); registrarLog("Sem reais para operar. Coloque saldo em alguma corretora (clique em + saldo).", "warn"); }
+    return;
+  }
+  for(const a of ativas) for(const b of ativas){
+    if(a === b) continue;
+    const v = Math.floor(Math.min(auto.max, auto.rebal !== false ? totalBrl : sim.saldos[a].brl));
     if(v < 50) continue;
     const r = calcRota(a, b, v, dados.cotacoes[a], dados.cotacoes[b]);
     if(r.faltou || (cfg.modo === "instantaneo" && sim.saldos[b].usdt < r.chega)) continue;
     if(!melhor || r.pct > melhor.pct) melhor = r;
   }
-  if(!melhor) return;
+  if(!melhor){
+    if(Date.now() - ultimoAviso > 30000){ ultimoAviso = Date.now(); registrarLog(auto.rebal !== false ? "Nenhuma rota disponível com as corretoras ativas." : "Nenhuma corretora ativa tem reais suficientes. Ligue \"levar os reais sozinho\" ou coloque saldo.", "warn"); }
+    return;
+  }
   if(melhor.pct < auto.minimo){
-    if(Date.now() - ultimoAviso > 30000){ ultimoAviso = Date.now(); registrarLog(`Procurando… melhor agora ${nome(melhor.a)} → ${nome(melhor.b)} ${pct(melhor.pct)} (abaixo de ${nf(auto.minimo)}%)`, "faint"); }
+    if(Date.now() - ultimoAviso > 30000){ ultimoAviso = Date.now(); registrarLog(`Procurando… a melhor rota agora é ${nome(melhor.a)} → ${nome(melhor.b)} com ${pct(melhor.pct)}, abaixo do seu mínimo de ${nf(auto.minimo, 2)}%. Para operar mais, escolha um mínimo menor.`, "faint"); }
     return;
   }
   if(espera > 0){
@@ -1058,6 +1094,10 @@ async function rodarAutobot(){
     return;
   }
   auto.ultima = Date.now(); gravar("mesa_auto", auto);
+  if(sim.saldos[melhor.a].brl < melhor.valor){
+    const mv = puxarReais(melhor.a, melhor.valor - sim.saldos[melhor.a].brl);
+    registrarLog(`Pix simulado: ${R(mv)} levados para a ${nome(melhor.a)} antes de operar`, "acc"); renderStrip();
+  }
   registrarLog(`Executando: ${nome(melhor.a)} → ${nome(melhor.b)} com ${R(melhor.valor)} · previsto ${RS(melhor.lucro)} (${pct(melhor.pct)})`, "acc");
   executar(melhor.a, melhor.b, melhor.valor, true);
 }
