@@ -76,13 +76,17 @@ export const TICKERS = {
   },
   coinex: async (moedas) => {
     const out = {};
+    let erro = null;
     await Promise.all(moedas.map(async m => {
       try {
         const d = await j(`https://api.coinex.com/v2/spot/depth?market=${PAR.coinex(m)}&limit=5&interval=0`);
+        if (d.code !== 0) throw new Error(d.message || `código ${d.code}`);
         const bid = num(d.data?.depth?.bids?.[0]?.[0]), ask = num(d.data?.depth?.asks?.[0]?.[0]);
         if (bid && ask) out[PAR.coinex(m)] = { bid, ask };
-      } catch {}
+      } catch (e) { erro = erro || e; }
     }));
+    // se nenhuma moeda veio, mostra o motivo no painel
+    if (!Object.keys(out).length && erro) throw erro;
     return out;
   },
 };
