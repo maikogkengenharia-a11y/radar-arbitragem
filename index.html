@@ -211,7 +211,8 @@ svg text{fill:var(--muted);font:10px var(--mono)}
 
 /* símbolos das corretoras */
 .logo{position:relative;overflow:hidden;font-family:var(--mono)}
-.logo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;padding:3px;background:#16161a}
+.logo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#fff;border-radius:inherit}
+.logo{border-radius:50%!important}
 .logo.lp{width:20px;height:20px;font-size:8px;display:inline-grid;vertical-align:middle;border-radius:50%}
 .logo.kb{background:#31CB9E;color:#04160b}
 .cx .logo{border-radius:50%}
@@ -538,27 +539,28 @@ const EX = {
   mercadobitcoin:{nome:"Mercado Bitcoin",cor:"#FF5A36",s:"MB",dom:"mercadobitcoin.com.br"}, bitso:{nome:"Bitso",cor:"#1D2A3A",s:"BT",dom:"bitso.com"},
   novadax:{nome:"NovaDAX",cor:"#3B5BDB",s:"ND",dom:"novadax.com.br"}, foxbit:{nome:"Foxbit",cor:"#F37021",s:"FX",dom:"foxbit.com.br"},
   mexc:{nome:"MEXC",cor:"#1972E2",s:"MX",dom:"mexc.com"},
-  avenia:{nome:"Avenia",cor:"#7C5CFF",s:"AV",tipo:"dex"}, chainless:{nome:"Chainless",cor:"#2563EB",s:"CL",tipo:"dex"},
-  picnic:{nome:"Picnic",cor:"#E5484D",s:"PN",tipo:"dex"},
+  avenia:{nome:"Avenia",cor:"#7C5CFF",s:"AV",dom:"avenia.io",tipo:"dex"}, chainless:{nome:"Chainless",cor:"#2563EB",s:"CL",dom:"chainless.finance",tipo:"dex"},
+  picnic:{nome:"Picnic",cor:"#E5484D",s:"PN",dom:"usepicnic.com",tipo:"dex"},
+  polygon:{nome:"Carteira Polygon",cor:"#8247E5",s:"PO",dom:"polygon.technology",tipo:"dex"},
 };
 const isDex = c => EX[c] && EX[c].tipo === "dex";
 // a MEXC fica listada mas desligada: ela não tem o par USDT/BRL
-const NOVAS = ["avenia","chainless","picnic"];
+const NOVAS = ["avenia","chainless","picnic","polygon"];
 const PADRAO = {
   // KuCoin e NovaDAX ficam desligadas: não responderam ao vivo com USDT/BRL
-  corretoras: ["binance","bitget","bybit","mercadobitcoin","bitso","foxbit","avenia","chainless","picnic"],
-  v: 2,
+  corretoras: ["binance","bitget","bybit","mercadobitcoin","bitso","foxbit","avenia","chainless","picnic","polygon"],
+  v: 3,
   // taxa de negociação a mercado (taker), conta comum, em %
   // nas DEX (Avenia, Chainless, Picnic) a taxa junta a troca na KyberSwap e o resgate via Pix
-  taxas: {binance:0.10,bitget:0.10,bybit:0.10,kucoin:0.10,mercadobitcoin:0.70,bitso:0.65,novadax:0.50,foxbit:0.50,mexc:0.05,avenia:0.05,chainless:0.05,picnic:0.10},
+  taxas: {binance:0.10,bitget:0.10,bybit:0.10,kucoin:0.10,mercadobitcoin:0.70,bitso:0.65,novadax:0.50,foxbit:0.50,mexc:0.05,avenia:0.05,chainless:0.05,picnic:0.10,polygon:0.02},
   // taxa de saque do USDT, em USDT (rede mais barata disponível)
-  saque: {binance:0.01,bitget:0.10,bybit:0.30,kucoin:1,mercadobitcoin:1,bitso:1,novadax:1,foxbit:1,mexc:0.10,avenia:0.02,chainless:0.02,picnic:0.02},
-  rede: {binance:"BEP20",bitget:"BEP20",bybit:"BEP20",kucoin:"TRC20",mercadobitcoin:"Polygon",bitso:"TRC20",novadax:"TRC20",foxbit:"TRC20",mexc:"BEP20",avenia:"Polygon",chainless:"Polygon",picnic:"Polygon"},
-  nacional: {binance:false,bitget:false,bybit:false,kucoin:false,mercadobitcoin:true,bitso:false,novadax:true,foxbit:true,mexc:false,avenia:true,chainless:true,picnic:true},
+  saque: {binance:0.01,bitget:0.10,bybit:0.30,kucoin:1,mercadobitcoin:1,bitso:1,novadax:1,foxbit:1,mexc:0.10,avenia:0.02,chainless:0.02,picnic:0.02,polygon:0.02},
+  rede: {binance:"BEP20",bitget:"BEP20",bybit:"BEP20",kucoin:"TRC20",mercadobitcoin:"Polygon",bitso:"TRC20",novadax:"TRC20",foxbit:"TRC20",mexc:"BEP20",avenia:"Polygon",chainless:"Polygon",picnic:"Polygon",polygon:"Polygon"},
+  nacional: {binance:false,bitget:false,bybit:false,kucoin:false,mercadobitcoin:true,bitso:false,novadax:true,foxbit:true,mexc:false,avenia:true,chainless:true,picnic:true,polygon:false},
   valor: 5000, minimo: 0.10, modo: "transferir", tempo: 3, acelerar: true,
   iniBrl: 0, iniUsdt: 0,
 };
-const AUTO_PADRAO = { on:false, corretoras:["binance","bitget","bybit","mercadobitcoin","bitso","foxbit","avenia","chainless","picnic"], minimo:0.3, max:5000, intervalo:1, ultima:0 };
+const AUTO_PADRAO = { on:false, corretoras:["binance","bitget","bybit","mercadobitcoin","bitso","foxbit","avenia","chainless","picnic","polygon"], minimo:0.3, max:5000, intervalo:1, ultima:0 };
 const MINIMOS = [0.1,0.2,0.3,0.5,1,2], INTERVALOS = [1,2,3,5,10], POLL_MS = 4000, POR_PAG = 20;
 
 // ============================================================ estado
@@ -570,7 +572,7 @@ function mesclar(base, salvo){ const o = clone(base); for(const k in (salvo||{})
 let cfg = mesclar(PADRAO, ler("mesa_cfg", null));
 let auto = mesclar(AUTO_PADRAO, ler("mesa_auto", null));
 // quem já usava a versão anterior ganha as corretoras novas ligadas
-if((cfg.v || 1) < 2){ cfg.corretoras = [...new Set([...cfg.corretoras, ...NOVAS])]; auto.corretoras = [...new Set([...auto.corretoras, ...NOVAS])]; cfg.v = 2; gravar("mesa_cfg", cfg); gravar("mesa_auto", auto); }
+if((cfg.v || 1) < 3){ cfg.corretoras = [...new Set([...cfg.corretoras, ...NOVAS])]; auto.corretoras = [...new Set([...auto.corretoras, ...NOVAS])]; cfg.v = 3; gravar("mesa_cfg", cfg); gravar("mesa_auto", auto); }
 let sim = ler("mesa_sim", null);
 function saldosIniciais(){ const s = {}; for(const c of Object.keys(EX)) s[c] = {brl: +cfg.iniBrl || 0, usdt: +cfg.iniUsdt || 0}; return s; }
 if(!sim || !sim.saldos) sim = { saldos: saldosIniciais(), hist: [], log: [], criado: Date.now() };
@@ -594,10 +596,11 @@ const dataHora = t => new Date(t).toLocaleString("pt-BR",{day:"2-digit",month:"2
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const $ = s => document.querySelector(s);
 const nome = c => EX[c] ? EX[c].nome : c;
-const icone = c => EX[c].dom ? `<img src="https://www.google.com/s2/favicons?domain=${EX[c].dom}&sz=64" alt="" loading="lazy" onerror="this.remove()">` : "";
+const fav = dom => `<img src="https://www.google.com/s2/favicons?domain=${dom}&sz=128" alt="" loading="lazy" onerror="this.remove()">`;
+const icone = c => EX[c].dom ? fav(EX[c].dom) : "";
 const logo = c => `<span class="logo" style="background:${EX[c].cor}">${EX[c].s}${icone(c)}</span>`;
 const logoP = c => `<span class="logo lp" style="background:${EX[c].cor}">${EX[c].s}${icone(c)}</span>`;
-const kyber = `<span class="logo kb" title="KyberSwap · Polygon">K</span>`;
+const kyber = `<span class="logo kb" title="KyberSwap · Polygon">K${fav("kyberswap.com")}</span>`;
 const tipoRota = r => `${isDex(r.a) ? "DEX" : "CEX"} → ${isDex(r.b) ? "DEX" : "CEX"}`;
 const viaRota = r => isDex(r.a) || isDex(r.b) ? "via Kyber · Polygon" : `via ${cfg.rede[r.a] || "BEP20"}`;
 const dorme = ms => new Promise(r => setTimeout(r, ms));
@@ -948,7 +951,7 @@ async function executar(a, b, valor, eAuto, retomar){
         const taxaB = venda.rec * (+cfg.taxas[op.b]||0)/100;
         op.medioVenda = venda.medio; op.taxaB = taxaB; op.final = venda.rec - taxaB;
         S[op.b].usdt -= op.chega; S[op.b].brl += op.final; salvarSim();
-        avancar(isDex(op.b) ? `Trocou na KyberSwap a ${P4(venda.medio)} BRLA por USDT e resgatou via Pix na ${nome(op.b)}. Recebido: ${R(op.final)}.` : `Vendeu a ${P4(venda.medio)} (preço de agora). Recebido: ${R(op.final)}.`);
+        avancar(op.b === "polygon" ? `Trocou na KyberSwap a ${P4(venda.medio)} BRLA por USDT. Os BRLA ficam na carteira Polygon (1 BRLA = R$ 1): ${R(op.final)}.` : isDex(op.b) ? `Trocou na KyberSwap a ${P4(venda.medio)} BRLA por USDT e resgatou via Pix na ${nome(op.b)}. Recebido: ${R(op.final)}.` : `Vendeu a ${P4(venda.medio)} (preço de agora). Recebido: ${R(op.final)}.`);
       }
     }
     // concluir

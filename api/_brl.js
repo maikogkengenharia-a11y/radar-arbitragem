@@ -6,7 +6,7 @@ export const BRL = {
   binance: "Binance", bitget: "Bitget", bybit: "Bybit", kucoin: "KuCoin",
   mercadobitcoin: "Mercado Bitcoin", bitso: "Bitso", novadax: "NovaDAX", foxbit: "Foxbit", mexc: "MEXC",
   // saída por DEX: USDT → BRLA na KyberSwap (Polygon) e BRLA → reais via Pix nestes apps
-  avenia: "Avenia", chainless: "Chainless", picnic: "Picnic",
+  avenia: "Avenia", chainless: "Chainless", picnic: "Picnic", polygon: "Carteira Polygon",
 };
 
 // ---------- KyberSwap (Polygon): preço de USDT ↔ BRLA para alguns tamanhos de ordem
@@ -69,7 +69,7 @@ export const LIVRO_BRL = {
   novadax: async () => { const d = await j("https://api.novadax.com/v1/market/depth?symbol=USDT_BRL&limit=50"); return [d.data?.asks, d.data?.bids]; },
   foxbit: async () => { const d = await j("https://api.foxbit.com.br/rest/v3/markets/usdtbrl/orderbook?depth=50"); return [d.asks, d.bids]; },
   mexc: async () => { const d = await j("https://api.mexc.com/api/v3/depth?symbol=USDTBRL&limit=50"); return [d.asks, d.bids]; },
-  avenia: livroKyber, chainless: livroKyber, picnic: livroKyber,
+  avenia: livroKyber, chainless: livroKyber, picnic: livroKyber, polygon: livroKyber,
 };
 
 export async function livroBrl(c) {
