@@ -153,6 +153,12 @@ label.f{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--mu
 .toggle::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--muted);transition:left .15s}
 .toggle.on{background:var(--good);border-color:var(--good)}
 .toggle.on::after{left:27px;background:#04160b}
+.servidor .loc{display:none!important}
+.servidor [data-exec],.servidor #kGo,.servidor #btnRebal,.servidor .cx .mais,.servidor .strip .ed{display:none!important}
+.srv{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.srv>div{background:var(--bg2);border:1px solid var(--rule);border-radius:12px;padding:12px}
+.srv b{display:block;font:500 17px var(--mono);margin-top:4px}
+@media (max-width:860px){.srv{grid-template-columns:1fr 1fr}}
 .auto-card{border-color:#2fd17c44;background:linear-gradient(180deg,#2fd17c0c,transparent 60%),var(--panel)}
 .log{max-height:300px;overflow:auto;display:flex;flex-direction:column;font:12px var(--mono)}
 .log div{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--rule)}
@@ -343,18 +349,19 @@ svg text{fill:var(--muted);font:10px var(--mono)}
     <section class="pg" id="pg-autobot">
       <div class="h2"><span class="idx">03</span><h2>modo <em>autônomo</em></h2></div>
       <div class="card auto-card" style="display:flex;flex-direction:column;gap:16px">
-        <div class="row" style="justify-content:space-between">
+        <div id="srvBox" hidden></div>
+        <div class="row loc" style="justify-content:space-between">
           <div><div class="eyebrow" style="color:var(--good)">Execução automática</div><div style="font-size:20px;font-weight:600">deixar o robô caçar diferenças</div><div class="muted" style="font-size:13px">opera sozinho quando o lucro líquido passa do mínimo que você escolher</div></div>
           <div class="row"><span class="eyebrow" id="autoSt">desligado</span><button class="toggle" id="autoTg" aria-label="Ligar ou desligar o robô"></button></div>
         </div>
-        <div class="grid g2">
+        <div class="grid g2 loc">
           <div style="display:flex;flex-direction:column;gap:8px"><div class="eyebrow">Corretoras ativas</div><div class="chips" id="autoEx"></div></div>
           <div style="display:flex;flex-direction:column;gap:8px"><div class="eyebrow">Lucro líquido mínimo</div><div class="chips" id="autoMin"></div></div>
           <div style="display:flex;flex-direction:column;gap:8px"><label class="f"><span class="eyebrow">Valor máximo por operação (R$)</span><input id="autoMax" type="number" min="50" step="100" class="num"></label>
             <label class="f" style="flex-direction:row;align-items:center;gap:8px;color:var(--fg)"><input type="checkbox" id="autoRebal"> Levar os reais sozinho para a corretora de compra (Pix simulado)</label></div>
           <div style="display:flex;flex-direction:column;gap:8px"><div class="eyebrow">Intervalo entre operações</div><div class="chips" id="autoInt"></div></div>
         </div>
-        <div class="row" style="justify-content:space-between">
+        <div class="row loc" style="justify-content:space-between">
           <div class="banner" style="flex:1;min-width:240px">O robô só roda com esta página aberta. Se fechar a aba, ele para. Tudo aqui é simulado: nenhum dinheiro de verdade é movido.</div>
           <button class="go" id="autoSalvar" style="background:var(--good);border-color:var(--good);color:#04160b">Salvar</button>
         </div>
@@ -363,7 +370,7 @@ svg text{fill:var(--muted);font:10px var(--mono)}
           <div class="card" style="background:var(--bg2)"><div class="eyebrow">Operações automáticas hoje</div><div class="num" style="font-size:20px;margin-top:6px" id="autoHoje">0</div></div>
         </div>
         <div class="card" style="background:var(--bg2)">
-          <div class="row" style="justify-content:space-between"><div class="eyebrow">Atividade em tempo real</div><button class="lnk" id="autoLimpar">limpar</button></div>
+          <div class="row" style="justify-content:space-between"><div class="eyebrow">Atividade em tempo real</div><button class="lnk loc" id="autoLimpar">limpar</button></div>
           <div class="log" id="autoLog"></div>
         </div>
       </div>
@@ -584,7 +591,7 @@ let sim = ler("mesa_sim", null);
 function saldosIniciais(){ const s = {}; for(const c of Object.keys(EX)) s[c] = {brl: +cfg.iniBrl || 0, usdt: +cfg.iniUsdt || 0}; return s; }
 if(!sim || !sim.saldos) sim = { saldos: saldosIniciais(), hist: [], log: [], criado: Date.now() };
 for(const c of Object.keys(EX)) if(!sim.saldos[c]) sim.saldos[c] = {brl:+cfg.iniBrl||0, usdt:+cfg.iniUsdt||0};
-const salvarSim = () => gravar("mesa_sim", sim);
+const salvarSim = () => { if(!servidor) gravar("mesa_sim", sim); };
 const midAtual = () => dados && Object.values(dados.cotacoes).length ? Object.values(dados.cotacoes).reduce((s, q) => s + (q.ask+q.bid)/2, 0)/Object.values(dados.cotacoes).length : 5.3;
 // quanto foi colocado de saldo (para mostrar o ganho real depois das negociações)
 if(sim.aportes == null){ sim.aportes = Object.values(sim.saldos).reduce((s, x) => s + x.brl + x.usdt*5.3, 0) - sim.hist.reduce((s, h) => s + h.lucro, 0); }
@@ -679,6 +686,7 @@ async function ler_precos(){
 
 // ============================================================ render geral
 function renderBot(){
+  if(servidor) return;
   $("#botDot").classList.toggle("on", !!auto.on);
   $("#botTxt").textContent = auto.on ? (emExecucao && emExecucao.auto ? "robô operando" : "robô ligado") : "robô desligado";
 }
@@ -714,6 +722,7 @@ function renderConexoes(){
 let saldoDe = null;
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-saldo]"); if(!b) return;
+  if(servidor){ toast("Os saldos agora são do robô 24h. Para mudar, me peça no chat.", "acc"); return; }
   if(emExecucao){ toast("Espere a operação em andamento terminar para mexer nos saldos.", "acc"); return; }
   saldoDe = b.dataset.saldo;
   $("#mSaldoT").textContent = "saldo na " + nome(saldoDe);
@@ -894,6 +903,7 @@ function planoSaldo(a, v){
   return `Ao executar, ${fora > 0 ? `trago ${R(fora)} da ${de} e ` : ""}coloco ${R(falta - fora)} de saldo novo na ${nome(a)} para completar.`;
 }
 function prepararSaldo(a, v){
+  if(servidor) return;
   const falta = v - sim.saldos[a].brl; if(falta <= 0.004) return;
   const mv = puxarReais(a, falta);
   if(mv > 0) registrarLog(`Pix simulado: ${R(mv)} levados para a ${nome(a)}`, "acc");
@@ -937,6 +947,7 @@ async function livros(cs){
   return d.cotacoes;
 }
 async function executar(a, b, valor, eAuto, retomar){
+  if(servidor){ toast("Quem opera agora é o robô 24h do servidor. Acompanhe pelo Autobot e pelo Histórico.", "acc"); return false; }
   if(emExecucao) return false;
   const transf = (retomar ? retomar.modo : cfg.modo) === "transferir";
   const passos = transf ? PASSOS_T : PASSOS_I;
@@ -1095,7 +1106,7 @@ $("#autoTg").addEventListener("click", () => {
 $("#autoLimpar").addEventListener("click", () => { sim.log = []; salvarSim(); renderLog(); });
 let ultimoAviso = 0;
 async function rodarAutobot(){
-  if(!auto.on || emExecucao || !dados) return;
+  if(servidor || !auto.on || emExecucao || !dados) return;
   const espera = auto.intervalo*60000 - (Date.now() - (auto.ultima || 0));
   let melhor = null;
   const ativas = auto.corretoras.filter(c => dados.cotacoes[c]);
@@ -1288,7 +1299,7 @@ function irPara(){
   document.querySelectorAll("#tabbar a").forEach(a => a.classList.toggle("on", a.dataset.pg === p));
   $("#btnMais").classList.toggle("on", ["performance","impostos","config","guia"].includes(p));
   $("#sheet").classList.remove("on"); window.scrollTo(0, 0);
-  if(p === "autobot") renderAutobot(true);
+  if(p === "autobot"){ renderAutobot(true); renderServidor(); }
   if(p === "performance") renderPerformance();
   if(p === "historico") renderHistorico();
   if(p === "impostos") renderImpostos();
@@ -1302,11 +1313,54 @@ $("#sheet").addEventListener("click", e => { if(e.target.id === "sheet") $("#she
 function saudacao(){ const h = new Date().getHours(); $("#saud").textContent = h < 12 ? "Bom dia." : h < 18 ? "Boa tarde." : "Boa noite."; }
 setInterval(() => { $("#relogio").textContent = new Date().toLocaleTimeString("pt-BR"); }, 1000);
 
+// ============================================================ robô 24h no servidor
+// O robô roda no GitHub Actions a cada 5 min e grava saldos, histórico e atividade neste arquivo.
+const SRV_URL = "https://raw.githubusercontent.com/maikogkengenharia-a11y/radar-arbitragem/dados/estado.json";
+let servidor = null;
+async function lerServidor(){
+  try{
+    const r = await fetch(SRV_URL + "?t=" + Date.now(), {cache:"no-store"});
+    if(!r.ok) throw new Error("estado " + r.status);
+    servidor = await r.json();
+    sim = { saldos: servidor.saldos, hist: servidor.hist || [], log: servidor.log || [], aportes: servidor.aportes || 0, criado: servidor.criado };
+    for(const c of Object.keys(EX)) if(!sim.saldos[c]) sim.saldos[c] = {brl:0, usdt:0};
+    document.documentElement.classList.add("servidor");
+    auto.on = false;
+    if(servidor.config && servidor.config.max){ cfg.valor = servidor.config.max; $("#opValor").value = cfg.valor; }
+    renderStrip(); renderServidor();
+    if(dados){ rotas = calcularRotas(+cfg.valor); renderCotacoes(); renderOps(); }
+    const p = paginaAtual();
+    if(p === "performance") renderPerformance(); if(p === "historico") renderHistorico(); if(p === "impostos") renderImpostos();
+  }catch(e){ /* sem estado do servidor: continua no modo local */ }
+}
+function renderServidor(){
+  if(!servidor) return;
+  const c = servidor.config, p = servidor.pendente;
+  const verif = servidor.verificado || servidor.atualizado || 0, min = Math.round((Date.now() - verif)/60000);
+  const vivo = min <= 15;
+  $("#botDot").classList.toggle("on", vivo);
+  $("#botTxt").textContent = vivo ? `robô 24h · ${min <= 0 ? "agora" : "há " + min + " min"}` : "robô 24h · aguardando";
+  const hoje = new Date().toDateString(), hh = servidor.hist.filter(h => new Date(h.t).toDateString() === hoje);
+  $("#srvBox").hidden = false;
+  $("#srvBox").innerHTML = `<div class="row" style="justify-content:space-between;margin-bottom:12px"><div><div class="eyebrow" style="color:var(--good)">Robô 24h no servidor</div>
+      <div style="font-size:20px;font-weight:600">operando sozinho, mesmo com a página fechada</div>
+      <div class="muted" style="font-size:13px">Só compra com lucro previsto de pelo menos ${nf(c.minimo, 2)}% já com todas as taxas, até ${R(c.max)} por vez. Nunca vende no prejuízo: se o preço piorar no caminho, segura o USDT e espera.</div></div>
+      <span class="pill"><span class="dot ${vivo ? "on" : ""}"></span>${vivo ? "ativo" : "aguardando próxima rodada"}</span></div>
+    <div class="srv">
+      <div><span class="eyebrow">Última verificação</span><b>${verif ? hora(verif) : "—"}</b></div>
+      <div><span class="eyebrow">Lucro hoje</span><b class="${hh.reduce((t,h)=>t+h.lucro,0) >= 0 ? "good" : "bad"}">${RS(hh.reduce((t,h)=>t+h.lucro,0))}</b></div>
+      <div><span class="eyebrow">Operações hoje</span><b>${hh.length}</b></div>
+      <div><span class="eyebrow">Agora</span><b style="font-size:13px;font-family:var(--sans)">${p ? (p.segurandoDesde ? `segurando USDT na ${nome(p.b)} até vender sem prejuízo` : `USDT a caminho da ${nome(p.b)}`) : "procurando oportunidade"}</b></div>
+    </div>
+    <div class="faint" style="font-size:12px;margin-top:10px">A página atualiza estes números sozinha a cada minuto. Para mudar mínimo, valor ou saldos do robô 24h, é só me pedir no chat.</div>`;
+}
+
 // ============================================================ início
 $("#opValor").value = cfg.valor;
 saudacao(); irPara(); renderStrip();
 ler_precos(); setInterval(ler_precos, POLL_MS);
-setTimeout(retomarPendente, 1500);
+lerServidor(); setInterval(lerServidor, 60000); setInterval(renderServidor, 15000);
+setTimeout(() => { if(!servidor) retomarPendente(); }, 3000);
 </script>
 </body>
 </html>

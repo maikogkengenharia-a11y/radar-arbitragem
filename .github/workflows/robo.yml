@@ -1,0 +1,41 @@
+name: Robô de arbitragem (simulação 24h)
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: robo
+  cancel-in-progress: false
+
+jobs:
+  rodar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: codigo
+      - uses: actions/checkout@v4
+        with:
+          ref: dados
+          path: dados
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Rodar o robô (~4,5 min)
+        run: node codigo/bot/bot.mjs dados/estado.json
+      - name: Salvar o estado
+        run: |
+          cd dados
+          git config user.name "robo-arbitragem"
+          git config user.email "robo-arbitragem@users.noreply.github.com"
+          git add estado.json
+          git commit -m "robô: rodada $(date -u +%Y-%m-%dT%H:%MZ)" || exit 0
+          git pull --rebase -q || true
+          git push
