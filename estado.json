@@ -1,0 +1,116 @@
+{
+ "versao": 1,
+ "criado": 1792432227629,
+ "aportes": 1000,
+ "saldos": {
+  "binance": {
+   "brl": 1000,
+   "usdt": 0
+  },
+  "bitget": {
+   "brl": 0,
+   "usdt": 0
+  },
+  "bybit": {
+   "brl": 0,
+   "usdt": 0
+  },
+  "kucoin": {
+   "brl": 0,
+   "usdt": 0
+  },
+  "mercadobitcoin": {
+   "brl": 0,
+   "usdt": 0
+  },
+  "bitso": {
+   "brl": 0,
+   "usdt": 0
+  },
+  "novadax": {
+   "brl": 0,
+   "usdt": 0
+  },
+  "foxbit": {
+   "brl": 0,
+   "usdt": 0
+  },
+  "mexc": {
+   "brl": 0,
+   "usdt": 0
+  },
+  "avenia": {
+   "brl": 0,
+   "usdt": 0
+  },
+  "chainless": {
+   "brl": 0,
+   "usdt": 0
+  },
+  "picnic": {
+   "brl": 0,
+   "usdt": 0
+  },
+  "polygon": {
+   "brl": 0,
+   "usdt": 0
+  }
+ },
+ "hist": [],
+ "log": [
+  {
+   "t": 1792432227629,
+   "txt": "Robô 24h iniciado: R$ 1.000,00 na Binance, mínimo de lucro 0,02%, nunca vende no prejuízo",
+   "tipo": "good"
+  }
+ ],
+ "pendente": null,
+ "config": {
+  "corretoras": [
+   "binance",
+   "bitget",
+   "bybit",
+   "mercadobitcoin",
+   "bitso",
+   "foxbit",
+   "avenia",
+   "chainless",
+   "picnic",
+   "polygon"
+  ],
+  "taxas": {
+   "binance": 0.1,
+   "bitget": 0.1,
+   "bybit": 0.1,
+   "kucoin": 0.1,
+   "mercadobitcoin": 0.7,
+   "bitso": 0.65,
+   "novadax": 0.5,
+   "foxbit": 0.5,
+   "mexc": 0.05,
+   "avenia": 0.05,
+   "chainless": 0.05,
+   "picnic": 0.1,
+   "polygon": 0.02
+  },
+  "saque": {
+   "binance": 0.01,
+   "bitget": 0.1,
+   "bybit": 0.3,
+   "kucoin": 1,
+   "mercadobitcoin": 1,
+   "bitso": 1,
+   "novadax": 1,
+   "foxbit": 1,
+   "mexc": 0.1,
+   "avenia": 0.02,
+   "chainless": 0.02,
+   "picnic": 0.02,
+   "polygon": 0.02
+  },
+  "minimo": 0.02,
+  "max": 1000,
+  "intervaloMin": 1,
+  "transferenciaSeg": 120
+ }
+}
