@@ -16,7 +16,7 @@ const pct = n => (n >= 0 ? "+" : "") + nf(n, 3) + "%";
 
 // ---------------------------------------------------------------- estado
 export async function lerEstado() {
-  const r = await get(ARQ, { access: "private" }).catch(() => null);
+  const r = await get(ARQ, { access: "private", useCache: false }).catch(() => null);
   if (r && r.stream) {
     const e = JSON.parse(await new Response(r.stream).text());
     return { e, etag: r.blob?.etag || r.etag || null };
@@ -29,7 +29,7 @@ export async function lerEstado() {
 }
 export async function salvarEstado(e, etag) {
   e.atualizado = Date.now();
-  const opts = { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: "application/json" };
+  const opts = { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: "application/json", cacheControlMaxAge: 60 };
   if (etag) opts.ifMatch = etag;
   await put(ARQ, JSON.stringify(e), opts);
 }
@@ -39,7 +39,8 @@ export async function alterar(fn) {
     const { e, etag } = await lerEstado();
     const out = await fn(e);
     if (out && out.semGravar) return out;
-    try { await salvarEstado(e, etag); return out; }
+    // na última tentativa grava sem a checagem de versão, para nunca travar o robô
+    try { await salvarEstado(e, i < 3 ? etag : null); return out; }
     catch (err) {
       if (String(err && (err.name || err.message)).includes("Precondition")) { await new Promise(r => setTimeout(r, 300 + i * 400)); continue; }
       throw err;
