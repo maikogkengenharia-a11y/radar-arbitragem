@@ -542,10 +542,11 @@ const EX = {
   picnic:{nome:"Picnic",cor:"#E5484D",s:"PN",tipo:"dex"},
 };
 const isDex = c => EX[c] && EX[c].tipo === "dex";
-const NOVAS = ["mexc","avenia","chainless","picnic"];
+// a MEXC fica listada mas desligada: ela não tem o par USDT/BRL
+const NOVAS = ["avenia","chainless","picnic"];
 const PADRAO = {
   // KuCoin e NovaDAX ficam desligadas: não responderam ao vivo com USDT/BRL
-  corretoras: ["binance","bitget","bybit","mercadobitcoin","bitso","foxbit","mexc","avenia","chainless","picnic"],
+  corretoras: ["binance","bitget","bybit","mercadobitcoin","bitso","foxbit","avenia","chainless","picnic"],
   v: 2,
   // taxa de negociação a mercado (taker), conta comum, em %
   // nas DEX (Avenia, Chainless, Picnic) a taxa junta a troca na KyberSwap e o resgate via Pix
@@ -557,7 +558,7 @@ const PADRAO = {
   valor: 5000, minimo: 0.10, modo: "transferir", tempo: 3, acelerar: true,
   iniBrl: 0, iniUsdt: 0,
 };
-const AUTO_PADRAO = { on:false, corretoras:["binance","bitget","bybit","mercadobitcoin","bitso","foxbit","mexc","avenia","chainless","picnic"], minimo:0.3, max:5000, intervalo:1, ultima:0 };
+const AUTO_PADRAO = { on:false, corretoras:["binance","bitget","bybit","mercadobitcoin","bitso","foxbit","avenia","chainless","picnic"], minimo:0.3, max:5000, intervalo:1, ultima:0 };
 const MINIMOS = [0.1,0.2,0.3,0.5,1,2], INTERVALOS = [1,2,3,5,10], POLL_MS = 4000, POR_PAG = 20;
 
 // ============================================================ estado
