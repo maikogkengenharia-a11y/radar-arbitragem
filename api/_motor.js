@@ -19,6 +19,7 @@ export async function lerEstado() {
   const r = await get(ARQ, { access: "private", useCache: false }).catch(() => null);
   if (r && r.stream) {
     const e = JSON.parse(await new Response(r.stream).text());
+    migrar(e);
     return { e, etag: r.blob?.etag || r.etag || null };
   }
   // primeira vez: começa do estado inicial guardado no GitHub
@@ -26,6 +27,15 @@ export async function lerEstado() {
   const e = await s.json();
   e.ligado = e.ligado !== false;
   return { e, etag: null };
+}
+// ajustes de taxas reais conferidas pelo usuário
+function migrar(e) {
+  if ((e.taxasVersao || 0) < 1) {
+    e.config.saque.binance = 0.03; // saque de USDT pela rede Polygon POS (conferido na Binance em 19/10)
+    e.taxasVersao = 1;
+    e.log = e.log || [];
+    e.log.unshift({ t: Date.now(), txt: "Taxa real de saque da Binance pela Polygon aplicada: 0,03 USDT", tipo: "acc" });
+  }
 }
 export async function salvarEstado(e, etag) {
   e.atualizado = Date.now();
