@@ -1,0 +1,13 @@
+[Unit]
+Description=Robo de arbitragem USDT/BRL
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/robo/servidor
+ExecStart=/usr/bin/node robo.mjs
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

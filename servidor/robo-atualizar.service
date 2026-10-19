@@ -1,0 +1,6 @@
+[Unit]
+Description=Atualiza o robo a partir do GitHub
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/robo/servidor/atualizar.sh

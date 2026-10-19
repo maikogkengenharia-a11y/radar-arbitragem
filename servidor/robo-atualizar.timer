@@ -1,0 +1,9 @@
+[Unit]
+Description=Procura atualizacoes do robo a cada 3 minutos
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=3min
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,9 @@
+{
+  "name": "robo-arbitragem-servidor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Robô real de arbitragem USDT/BRL: Binance <-> KyberSwap (Polygon)",
+  "engines": { "node": ">=20" },
+  "dependencies": { "ethers": "^6.13.0" }
+}
