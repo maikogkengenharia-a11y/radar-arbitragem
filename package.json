@@ -1,0 +1,8 @@
+{
+  "name": "radar-arbitragem",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Painel de arbitragem de cripto entre corretoras, com valores em reais",
+  "engines": { "node": ">=20" }
+}
