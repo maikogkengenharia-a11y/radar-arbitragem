@@ -66,6 +66,15 @@ function puxarReais(para, quanto) {
   return movido;
 }
 
+// interruptor de liga/desliga (salvo na Vercel); na dúvida, segue o último valor conhecido
+async function interruptor() {
+  try {
+    const r = await fetch(`${API}/api/robo?_=${Date.now()}`, { signal: AbortSignal.timeout(10000) });
+    if (r.ok) { const d = await r.json(); return d.ligado !== false; }
+  } catch {}
+  return e.ligado !== false;
+}
+
 async function passo() {
   const q = await precos();
   const agora = Date.now();
@@ -93,7 +102,10 @@ async function passo() {
     return;
   }
 
-  // 2) intervalo mínimo entre operações
+  // 2) desligado: termina o que estava a caminho, mas não compra mais
+  if (e.ligado === false) return;
+
+  // intervalo mínimo entre operações
   if (e.ultimaOp && agora - e.ultimaOp < (cfg.intervaloMin ?? 1) * 60000) return;
 
   // 3) procurar a melhor rota com o dinheiro disponível
@@ -113,6 +125,9 @@ async function passo() {
     return;
   }
 
+  // confere o interruptor de novo antes de comprar
+  if (!(await interruptor())) { e.ligado = false; log("Robô desligado pelo painel: não vou comprar mais nada.", "warn"); salvar(); return; }
+
   // 4) comprar: leva os reais (Pix simulado), compra e manda o USDT para a corretora de venda
   if (e.saldos[melhor.a].brl < valor) {
     const mv = puxarReais(melhor.a, valor - e.saldos[melhor.a].brl);
@@ -128,6 +143,11 @@ async function passo() {
 
 const fim = Date.now() + DURACAO_MS;
 e.rodadas = (e.rodadas || 0) + 1;
+{
+  const ligado = await interruptor();
+  if (ligado !== (e.ligado !== false)) log(ligado ? "Robô ligado pelo painel: voltando a procurar oportunidades." : "Robô desligado pelo painel: não compra mais nada (se houver USDT a caminho, termina a venda sem prejuízo).", ligado ? "good" : "warn");
+  e.ligado = ligado;
+}
 while (Date.now() < fim) {
   try { await passo(); } catch (err) { console.log("erro:", err.message); }
   e.verificado = Date.now();

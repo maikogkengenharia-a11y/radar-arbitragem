@@ -4,5 +4,10 @@
   "private": true,
   "type": "module",
   "description": "Painel de arbitragem de cripto entre corretoras, com valores em reais",
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@vercel/blob": "latest"
+  }
 }

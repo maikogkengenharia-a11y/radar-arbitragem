@@ -1316,12 +1316,27 @@ setInterval(() => { $("#relogio").textContent = new Date().toLocaleTimeString("p
 // ============================================================ robô 24h no servidor
 // O robô roda no GitHub Actions a cada 5 min e grava saldos, histórico e atividade neste arquivo.
 const SRV_URL = "https://raw.githubusercontent.com/maikogkengenharia-a11y/radar-arbitragem/dados/estado.json";
-let servidor = null;
+let servidor = null, roboLigado = null, roboAlterando = false;
+async function lerInterruptor(){
+  try{ const r = await fetch("/api/robo?_=" + Date.now(), {cache:"no-store"}); if(r.ok){ const d = await r.json(); if(!roboAlterando) roboLigado = d.ligado !== false; } }catch(e){}
+}
+async function mudarInterruptor(){
+  if(roboLigado === null || roboAlterando) return;
+  const novo = !roboLigado; roboAlterando = true; roboLigado = novo; renderServidor();
+  try{
+    const r = await fetch("/api/robo", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ligado: novo})});
+    const d = await r.json(); if(!r.ok) throw new Error(d.erro || "erro");
+    toast(novo ? "Robô ligado. Ele volta a procurar oportunidades na próxima rodada (em até 5 minutos)." : "Robô desligado. Não compra mais nada; se houver USDT a caminho, termina a venda sem prejuízo.", novo ? "" : "acc");
+  }catch(e){ roboLigado = !novo; toast("Não consegui mudar o robô: " + e.message, "bad"); }
+  roboAlterando = false; renderServidor();
+}
+document.addEventListener("click", e => { if(e.target.closest("#srvTg")) mudarInterruptor(); });
 async function lerServidor(){
   try{
     const r = await fetch(SRV_URL + "?t=" + Date.now(), {cache:"no-store"});
     if(!r.ok) throw new Error("estado " + r.status);
     servidor = await r.json();
+    await lerInterruptor();
     sim = { saldos: servidor.saldos, hist: servidor.hist || [], log: servidor.log || [], aportes: servidor.aportes || 0, criado: servidor.criado };
     for(const c of Object.keys(EX)) if(!sim.saldos[c]) sim.saldos[c] = {brl:0, usdt:0};
     document.documentElement.classList.add("servidor");
@@ -1337,20 +1352,22 @@ function renderServidor(){
   if(!servidor) return;
   const c = servidor.config, p = servidor.pendente;
   const verif = servidor.verificado || servidor.atualizado || 0, min = Math.round((Date.now() - verif)/60000);
-  const vivo = min <= 15;
+  const vivo = min <= 15, lig = roboLigado !== false;
   $("#botDot").classList.toggle("on", vivo);
-  $("#botTxt").textContent = vivo ? `robô 24h · ${min <= 0 ? "agora" : "há " + min + " min"}` : "robô 24h · aguardando";
+  $("#botDot").classList.toggle("on", vivo && lig);
+  $("#botTxt").textContent = !lig ? "robô desligado" : vivo ? `robô 24h · ${min <= 0 ? "agora" : "há " + min + " min"}` : "robô 24h · aguardando";
   const hoje = new Date().toDateString(), hh = servidor.hist.filter(h => new Date(h.t).toDateString() === hoje);
   $("#srvBox").hidden = false;
   $("#srvBox").innerHTML = `<div class="row" style="justify-content:space-between;margin-bottom:12px"><div><div class="eyebrow" style="color:var(--good)">Robô 24h no servidor</div>
-      <div style="font-size:20px;font-weight:600">operando sozinho, mesmo com a página fechada</div>
+      <div style="font-size:20px;font-weight:600">${lig ? "operando sozinho, mesmo com a página fechada" : "desligado: não faz novas operações"}</div>
       <div class="muted" style="font-size:13px">Só compra com lucro previsto de pelo menos ${nf(c.minimo, 2)}% já com todas as taxas, até ${R(c.max)} por vez. Nunca vende no prejuízo: se o preço piorar no caminho, segura o USDT e espera.</div></div>
-      <span class="pill"><span class="dot ${vivo ? "on" : ""}"></span>${vivo ? "ativo" : "aguardando próxima rodada"}</span></div>
+      <div class="row" style="flex:none"><span class="eyebrow ${lig ? "good" : ""}">${roboLigado === null ? "…" : lig ? (vivo ? "ligado" : "ligado · aguardando rodada") : "desligado"}</span>
+        <button class="toggle ${lig ? "on" : ""}" id="srvTg" aria-label="Ligar ou desligar o robô 24h" ${roboLigado === null || roboAlterando ? "disabled" : ""}></button></div></div>
     <div class="srv">
       <div><span class="eyebrow">Última verificação</span><b>${verif ? hora(verif) : "—"}</b></div>
       <div><span class="eyebrow">Lucro hoje</span><b class="${hh.reduce((t,h)=>t+h.lucro,0) >= 0 ? "good" : "bad"}">${RS(hh.reduce((t,h)=>t+h.lucro,0))}</b></div>
       <div><span class="eyebrow">Operações hoje</span><b>${hh.length}</b></div>
-      <div><span class="eyebrow">Agora</span><b style="font-size:13px;font-family:var(--sans)">${p ? (p.segurandoDesde ? `segurando USDT na ${nome(p.b)} até vender sem prejuízo` : `USDT a caminho da ${nome(p.b)}`) : "procurando oportunidade"}</b></div>
+      <div><span class="eyebrow">Agora</span><b style="font-size:13px;font-family:var(--sans)">${p ? (p.segurandoDesde ? `segurando USDT na ${nome(p.b)} até vender sem prejuízo` : `USDT a caminho da ${nome(p.b)}`) : lig ? "procurando oportunidade" : "parado (desligado)"}</b></div>
     </div>
     <div class="faint" style="font-size:12px;margin-top:10px">A página atualiza estes números sozinha a cada minuto. Para mudar mínimo, valor ou saldos do robô 24h, é só me pedir no chat.</div>`;
 }
