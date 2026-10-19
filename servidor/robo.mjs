@@ -607,6 +607,14 @@ async function ciclo() {
 let ultimoErro = "";
 async function loop() {
   log(`Robô iniciado. Carteira ${CARTEIRA.address}. Modo: ${E.modo}, ${E.ligado ? "ligado" : "desligado"}.`);
+  if (ENV.BINANCE_KEY) {
+    try {
+      const s = await saldosBinance();
+      const r = await bn("GET", "/sapi/v1/account/apiRestrictions").catch(() => ({}));
+      const faltam = [!r.enableSpotAndMarginTrading && "negociação spot", !r.enableWithdrawals && "saques", !r.ipRestrict && "restrição de IP"].filter(Boolean);
+      log(`Binance conectada: R$ ${r2(s.BRL)} e ${s.USDT.toFixed(4)} USDT.` + (faltam.length ? ` ATENÇÃO, falta ativar na chave: ${faltam.join(", ")}.` : " Permissões da chave OK."), faltam.length ? "aviso" : "lucro");
+    } catch (e) { log("Binance NÃO conectou: " + msg(e), "erro"); }
+  }
   for (;;) {
     try { await ciclo(); ultimoErro = ""; }
     catch (e) {
