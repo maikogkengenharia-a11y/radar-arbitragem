@@ -36,6 +36,11 @@ function migrar(e) {
     e.log = e.log || [];
     e.log.unshift({ t: Date.now(), txt: "Taxa real de saque da Binance pela Polygon aplicada: 0,03 USDT", tipo: "acc" });
   }
+  if ((e.taxasVersao || 0) < 2) {
+    e.config.taxas.picnic = 0.01; // resgate BRLA → Pix na Picnic é grátis (conferido em 19/10); sobra só a taxa de rede
+    e.taxasVersao = 2;
+    e.log.unshift({ t: Date.now(), txt: "Taxa real da Picnic aplicada: resgate de BRLA para Pix grátis", tipo: "acc" });
+  }
 }
 export async function salvarEstado(e, etag) {
   e.atualizado = Date.now();
