@@ -62,6 +62,26 @@ main{min-width:0;padding:22px max(16px,env(safe-area-inset-right,0px)) 60px max(
 .strip .v{font:500 13px var(--mono);margin-top:3px;white-space:nowrap}
 .strip .v2{font:12px var(--mono);color:var(--muted);white-space:nowrap}
 .strip .tot{background:var(--panel2)}
+.strip .cel{cursor:pointer;text-align:left;background:none;border:0;border-right:1px solid var(--rule);border-radius:0;padding:10px 14px;min-width:140px;flex:1 0 auto}
+.strip .cel:hover{background:var(--panel2)}
+.strip .cel .ed{font:11px var(--mono);color:var(--faint)}
+.strip .cel:hover .ed{color:var(--accent)}
+.strip .vazio{color:var(--muted);font-size:13px;display:flex;align-items:center}
+.conx{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.conx .eyebrow{margin-right:4px}
+.cx{display:inline-flex;align-items:center;gap:7px;border-radius:999px;padding:5px 12px 5px 6px;font-size:13px;background:var(--panel)}
+.cx .logo{width:20px;height:20px;font-size:8px;border-radius:50%}
+.cx.off{opacity:.55}
+.cx .d{width:6px;height:6px;border-radius:50%;background:var(--faint)}
+.cx .d.ok{background:var(--good)} .cx .d.err{background:var(--bad)}
+.cx .mais{font:600 11px var(--mono);color:var(--accent)}
+.qt{display:flex;flex-direction:column;gap:6px;border-top:1px dashed var(--rule2);padding-top:10px}
+.qt .q{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+.qt small{display:block;font:500 10px var(--mono);color:var(--faint);letter-spacing:.06em;text-transform:uppercase}
+.qt b{font:600 13px var(--mono)}
+.go.sm{padding:7px 10px;font-size:10.5px;letter-spacing:.08em}
+.go.sell{background:var(--good);border-color:var(--good);color:#04160b}
+.dif{font:12px var(--mono);color:var(--muted)}
 .toprota{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font:500 12px var(--mono);color:var(--muted)}
 .toprota b{color:var(--fg)}
 
@@ -99,7 +119,8 @@ main{min-width:0;padding:22px max(16px,env(safe-area-inset-right,0px)) 60px max(
 .ex .ab{display:flex;justify-content:space-between;font:500 12px var(--mono)}
 .ex .ab span{display:flex;flex-direction:column;gap:2px}
 .ex .ab small{font:500 10px var(--mono);color:var(--faint);letter-spacing:.1em}
-.ex .bal{display:flex;justify-content:space-between;font:12px var(--mono);color:var(--muted);border-top:1px dashed var(--rule2);padding-top:8px}
+.ex .bal{display:flex;justify-content:space-between;width:100%;font:12px var(--mono);color:var(--muted);border-top:1px dashed var(--rule2);padding-top:8px}
+.ex .bal:hover{color:var(--fg)}
 .ex .err{color:var(--bad);font-size:12px}
 .spark{height:44px;width:100%}
 .book{display:grid;grid-template-columns:1fr 1fr;gap:6px;font:11.5px var(--mono)}
@@ -234,6 +255,7 @@ svg text{fill:var(--muted);font:10px var(--mono)}
     </header>
 
     <div class="strip" id="strip"></div>
+    <div class="conx" id="conx"></div>
     <div class="toprota" id="toprota"></div>
 
     <!-- 01 COTAÇÕES -->
@@ -243,7 +265,7 @@ svg text{fill:var(--muted);font:10px var(--mono)}
         <div class="card kpi"><div class="eyebrow">Média entre corretoras</div><div class="big" id="kMed">—</div><div class="s" id="kMedS"></div></div>
         <div class="card kpi ask"><div class="eyebrow">Menor preço · comprar</div><div class="big" id="kAsk">—</div><div class="s" id="kAskS"></div></div>
         <div class="card kpi bid"><div class="eyebrow">Maior preço · vender</div><div class="big" id="kBid">—</div><div class="s" id="kBidS"></div></div>
-        <div class="card kpi"><div class="eyebrow">Diferença bruta</div><div class="big" id="kSpr">—</div><div class="s">antes das taxas</div></div>
+        <div class="card kpi"><div class="eyebrow">Diferença bruta</div><div class="big" id="kSpr">—</div><div class="s" id="kSprS">antes das taxas</div><button class="go sm" id="kGo" hidden style="margin-top:10px;width:100%">Negociar agora</button></div>
       </div>
       <div class="eyebrow" style="color:var(--accent)">Corretoras</div>
       <div class="exs" id="exs"></div>
@@ -400,6 +422,22 @@ svg text{fill:var(--muted);font:10px var(--mono)}
   </div>
 </div>
 
+<!-- saldo -->
+<div class="modal" id="mSaldo" hidden>
+  <div class="box" role="dialog" aria-modal="true" aria-labelledby="mSaldoT">
+    <div class="row" style="justify-content:space-between"><div class="eyebrow acc">Saldo simulado</div><button class="lnk" data-fechar-saldo>✕</button></div>
+    <h3 id="mSaldoT">saldo na corretora</h3>
+    <div class="muted" style="font-size:13px">Coloque quanto você teria nesta corretora. Depois de negociar, o saldo muda sozinho e você vê com quanto ficaria.</div>
+    <div class="grid g2">
+      <label class="f">Reais (R$)<input id="sBrl" type="number" min="0" step="100" class="num" style="font-size:18px;padding:10px"></label>
+      <label class="f">Dólar digital (USDT)<input id="sUsdt" type="number" min="0" step="10" class="num" style="font-size:18px;padding:10px"></label>
+    </div>
+    <div class="chips" id="sAtalhos"></div>
+    <label class="f" style="flex-direction:row;align-items:center;gap:8px;color:var(--fg)"><input type="checkbox" id="sCon"> Conectada: usar esta corretora nas cotações e oportunidades</label>
+    <div class="row" style="justify-content:space-between"><button id="sZerar">Zerar saldo</button><div class="row"><button data-fechar-saldo>Cancelar</button><button class="go" id="sSalvar">Salvar saldo</button></div></div>
+  </div>
+</div>
+
 <!-- execução -->
 <div class="modal" id="mExec" hidden>
   <div class="box" role="dialog" aria-modal="true" aria-labelledby="mExecT">
@@ -435,7 +473,7 @@ const PADRAO = {
   rede: {binance:"BEP20",bitget:"BEP20",bybit:"BEP20",kucoin:"TRC20",mercadobitcoin:"Polygon",bitso:"TRC20",novadax:"TRC20",foxbit:"TRC20"},
   nacional: {binance:false,bitget:false,bybit:false,kucoin:false,mercadobitcoin:true,bitso:false,novadax:true,foxbit:true},
   valor: 5000, minimo: 0.10, modo: "transferir", tempo: 3, acelerar: true,
-  iniBrl: 10000, iniUsdt: 0,
+  iniBrl: 0, iniUsdt: 0,
 };
 const AUTO_PADRAO = { on:false, corretoras:["binance","bitget","bybit","mercadobitcoin","bitso","foxbit"], minimo:0.3, max:5000, intervalo:1, ultima:0 };
 const MINIMOS = [0.1,0.2,0.3,0.5,1,2], INTERVALOS = [1,2,3,5,10], POLL_MS = 4000, POR_PAG = 20;
@@ -453,6 +491,9 @@ function saldosIniciais(){ const s = {}; for(const c of Object.keys(EX)) s[c] = 
 if(!sim || !sim.saldos) sim = { saldos: saldosIniciais(), hist: [], log: [], criado: Date.now() };
 for(const c of Object.keys(EX)) if(!sim.saldos[c]) sim.saldos[c] = {brl:+cfg.iniBrl||0, usdt:+cfg.iniUsdt||0};
 const salvarSim = () => gravar("mesa_sim", sim);
+const midAtual = () => dados && Object.values(dados.cotacoes).length ? Object.values(dados.cotacoes).reduce((s, q) => s + (q.ask+q.bid)/2, 0)/Object.values(dados.cotacoes).length : 5.3;
+// quanto foi colocado de saldo (para mostrar o ganho real depois das negociações)
+if(sim.aportes == null){ sim.aportes = Object.values(sim.saldos).reduce((s, x) => s + x.brl + x.usdt*5.3, 0) - sim.hist.reduce((s, h) => s + h.lucro, 0); }
 
 let dados = null, rotas = [], hist = {}, ultimaOk = 0, emExecucao = null, livroAberto = {}, pagHist = 0, periodo = 0;
 
@@ -545,16 +586,57 @@ function renderTudo(){
   const pg = paginaAtual();
   if(pg === "autobot") renderAutobot(false);
 }
+const temSaldo = c => sim.saldos[c].brl > 0.004 || sim.saldos[c].usdt > 0.00001;
 function renderStrip(){
-  const cs = Object.keys(EX).filter(c => cfg.corretoras.includes(c));
-  let tot = 0;
-  const mid = dados && Object.values(dados.cotacoes).length ? Object.values(dados.cotacoes).reduce((s, q) => s + (q.ask+q.bid)/2, 0)/Object.values(dados.cotacoes).length : 5;
-  const cel = cs.map(c => { const s = sim.saldos[c]; tot += s.brl + s.usdt*mid;
-    return `<div><div class="eyebrow">${nome(c)}</div><div class="v">${R(s.brl)}</div><div class="v2">${nf(s.usdt)} USDT</div></div>`; }).join("");
-  const ini = cs.length * ((+cfg.iniBrl||0) + (+cfg.iniUsdt||0)*mid);
-  $("#strip").innerHTML = cel + `<div class="tot"><div class="eyebrow">Total (virtual)</div><div class="v">${R(tot)}</div><div class="v2 ${tot>=ini?"good":"bad"}">${RS(tot-ini)} desde o início</div></div>
-    <div class="tot" style="display:flex;align-items:center"><button id="btnRebal" title="Simula transferir reais por Pix para deixar o mesmo valor em cada corretora" ${emExecucao ? "disabled" : ""}>Redistribuir reais</button></div>`;
+  const mid = midAtual();
+  const cs = Object.keys(EX).filter(temSaldo);
+  const tot = Object.keys(EX).reduce((s, c) => s + sim.saldos[c].brl + sim.saldos[c].usdt*mid, 0);
+  const ganho = tot - (sim.aportes || 0);
+  const cel = cs.map(c => { const s = sim.saldos[c];
+    return `<button class="cel" data-saldo="${c}" title="Alterar o saldo da ${nome(c)}"><div class="eyebrow">${nome(c)} <span class="ed">✎ editar</span></div><div class="v">${R(s.brl)}</div><div class="v2">${nf(s.usdt)} USDT</div></button>`; }).join("");
+  $("#strip").innerHTML = (cel || `<div class="vazio">Nenhum saldo ainda. Clique numa corretora abaixo para colocar saldo e simular.</div>`)
+    + `<div class="tot"><div class="eyebrow">Total (virtual)</div><div class="v">${R(tot)}</div><div class="v2 ${ganho>=0?"good":"bad"}">${RS(ganho)} com as negociações</div></div>
+    <div class="tot" style="display:flex;align-items:center"><button id="btnRebal" title="Simula transferir reais por Pix para deixar o mesmo valor em cada corretora conectada" ${emExecucao || !cs.length ? "disabled" : ""}>Redistribuir reais</button></div>`;
+  renderConexoes();
 }
+function renderConexoes(){
+  $("#conx").innerHTML = `<span class="eyebrow">Corretoras no sistema</span>` + Object.keys(EX).map(c => {
+    const on = cfg.corretoras.includes(c), erro = dados && dados.erros[c], ok = dados && dados.cotacoes[c];
+    return `<button class="cx ${on ? "" : "off"}" data-saldo="${c}" title="${on ? (erro ? esc("Sem resposta: " + erro) : "Conectada") : "Desconectada"} · clique para colocar saldo">
+      ${logo(c)}${nome(c)}<span class="d ${on ? (ok ? "ok" : erro ? "err" : "") : ""}"></span><span class="mais">+ saldo</span></button>`;
+  }).join("");
+}
+// ---------- modal de saldo
+let saldoDe = null;
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-saldo]"); if(!b) return;
+  if(emExecucao){ toast("Espere a operação em andamento terminar para mexer nos saldos.", "acc"); return; }
+  saldoDe = b.dataset.saldo;
+  $("#mSaldoT").textContent = "saldo na " + nome(saldoDe);
+  $("#sBrl").value = +sim.saldos[saldoDe].brl.toFixed(2); $("#sUsdt").value = +sim.saldos[saldoDe].usdt.toFixed(4);
+  $("#sCon").checked = cfg.corretoras.includes(saldoDe);
+  $("#sAtalhos").innerHTML = [1000, 5000, 10000, 25000, 50000].map(v => `<button class="chip acc" data-atalho="${v}">R$ ${nf(v,0)}</button>`).join("");
+  $("#mSaldo").hidden = false; $("#sBrl").focus(); $("#sBrl").select();
+});
+document.addEventListener("click", e => { const b = e.target.closest("[data-atalho]"); if(b) $("#sBrl").value = b.dataset.atalho; });
+document.querySelectorAll("[data-fechar-saldo]").forEach(b => b.addEventListener("click", () => $("#mSaldo").hidden = true));
+$("#sZerar").addEventListener("click", () => { $("#sBrl").value = 0; $("#sUsdt").value = 0; });
+$("#sSalvar").addEventListener("click", () => {
+  const c = saldoDe, s = sim.saldos[c], mid = midAtual();
+  const brl = Math.max(+$("#sBrl").value || 0, 0), usdt = Math.max(+$("#sUsdt").value || 0, 0);
+  sim.aportes = (sim.aportes || 0) + (brl - s.brl) + (usdt - s.usdt)*mid;
+  s.brl = brl; s.usdt = usdt; salvarSim();
+  const on = $("#sCon").checked, estava = cfg.corretoras.includes(c);
+  if(on !== estava){
+    cfg.corretoras = on ? [...cfg.corretoras, c] : cfg.corretoras.filter(x => x !== c);
+    if(cfg.corretoras.length < 2){ toast("Deixe pelo menos duas corretoras conectadas.", "bad"); cfg.corretoras = [...new Set([...cfg.corretoras, c])]; }
+    gravar("mesa_cfg", cfg);
+  }
+  registrarLog(`Saldo da ${nome(c)} definido: ${R(brl)} e ${nf(usdt)} USDT`, "acc");
+  toast(`Saldo da ${nome(c)}: ${R(brl)} · ${nf(usdt)} USDT`);
+  $("#mSaldo").hidden = true;
+  if(on !== estava) ler_precos(); else { renderStrip(); if(dados){ rotas = calcularRotas(+cfg.valor); renderCotacoes(); renderOps(); } }
+});
 document.addEventListener("click", e => {
   if(!e.target.closest("#btnRebal") || emExecucao) return;
   const cs = cfg.corretoras, tot = cs.reduce((s, c) => s + sim.saldos[c].brl, 0), cada = Math.floor(tot/cs.length*100)/100;
@@ -582,6 +664,12 @@ function renderCotacoes(){
   $("#kBid").textContent = "R$ " + P4(maxB[1].bid); $("#kBidS").textContent = "na " + nome(maxB[0]);
   const spr = (maxB[1].bid/minA[1].ask - 1)*100;
   $("#kSpr").textContent = pct(spr); $("#kSpr").className = "big " + (spr > 0 ? "good" : "bad");
+  const melhor = rotas.find(r => !r.faltou);
+  if(melhor){
+    $("#kSprS").innerHTML = `com taxas: <span class="${melhor.lucro>0?"good":"bad"}">${pct(melhor.pct)} · ${RS(melhor.lucro)}</span>`;
+    $("#kGo").hidden = false; $("#kGo").dataset.exec = `${melhor.a}|${melhor.b}`;
+    $("#kGo").textContent = `Negociar ${nome(melhor.a)} → ${nome(melhor.b)}`; $("#kGo").disabled = !!emExecucao;
+  }else{ $("#kSprS").textContent = "antes das taxas"; $("#kGo").hidden = true; }
 
   $("#exs").innerHTML = cfg.corretoras.map(c => {
     const q = dados.cotacoes[c], s = sim.saldos[c];
@@ -593,11 +681,22 @@ function renderCotacoes(){
       <div class="px">R$ ${P4((q.ask+q.bid)/2)}</div>
       <div class="ab"><span><small>COMPRA (ASK)</small><b class="acc">${P4(q.ask)}</b></span><span style="text-align:right"><small>VENDA (BID)</small><b class="good">${P4(q.bid)}</b></span></div>
       ${sparkline(hist[c] || [], cls === "sell" ? "var(--good)" : cls === "buy" ? "var(--accent)" : "var(--muted)")}
-      <div class="bal"><span>${R(s.brl)}</span><span>${nf(s.usdt)} USDT</span></div>
+      <div class="dif">${c === minA[0] ? "é a mais barata para comprar agora" : `compra ${pct((q.ask/minA[1].ask - 1)*100)} acima da mais barata`}</div>
+      ${negociarAqui(c)}
+      <button class="bal lnk" data-saldo="${c}" title="Alterar saldo"><span>${R(s.brl)}</span><span>${nf(s.usdt)} USDT ✎</span></button>
       <div class="row" style="justify-content:space-between"><button class="lnk" data-livro="${c}">${livroAberto[c] ? "▾" : "▸"} livro de ofertas</button><span class="faint num" style="font-size:11px">${q.ms} ms</span></div>
       ${livroAberto[c] ? livroHtml(q) : ""}
     </div>`;
   }).join("");
+}
+// melhor rota comprando nesta corretora e melhor rota vendendo nesta corretora
+function negociarAqui(c){
+  const compra = rotas.filter(r => r.a === c && !r.faltou)[0], venda = rotas.filter(r => r.b === c && !r.faltou)[0];
+  const linha = (r, tipo) => r ? `<div class="q"><div><small>${tipo === "c" ? `comprar aqui → vender na ${nome(r.b)}` : `comprar na ${nome(r.a)} → vender aqui`}</small>
+    <b class="${r.lucro>0?"good":"bad"}">${pct(r.pct)} · ${RS(r.lucro)}</b></div>
+    <button class="go sm ${tipo === "v" ? "sell" : ""}" data-exec="${r.a}|${r.b}" ${emExecucao ? "disabled" : ""}>${tipo === "c" ? "Comprar" : "Vender"}</button></div>` : "";
+  const html = linha(compra, "c") + linha(venda, "v");
+  return html ? `<div class="qt">${html}<div class="faint" style="font-size:11px">já com taxas · com ${R(+cfg.valor)}</div></div>` : "";
 }
 function sparkline(v, cor){
   if(v.length < 2) return `<svg class="spark" viewBox="0 0 200 44"><text x="0" y="26">juntando leituras…</text></svg>`;
