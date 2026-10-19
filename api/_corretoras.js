@@ -83,6 +83,7 @@ export const TICKERS = {
         if (d.code !== 0) throw new Error(d.message || `código ${d.code}`);
         const bid = num(d.data?.depth?.bids?.[0]?.[0]), ask = num(d.data?.depth?.asks?.[0]?.[0]);
         if (bid && ask) out[PAR.coinex(m)] = { bid, ask };
+        else erro = erro || new Error("resposta inesperada: " + JSON.stringify(d).slice(0, 140));
       } catch (e) { erro = erro || e; }
     }));
     // se nenhuma moeda veio, mostra o motivo no painel
