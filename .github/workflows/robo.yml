@@ -1,12 +1,13 @@
 name: Robô de arbitragem (simulação 24h)
 
+# A cada 5 minutos, chama a checagem do robô na Vercel por ~4,5 min (uma vez a cada 15 s).
+# O robô em si (preços, compra, venda, saldos) roda e fica salvo na Vercel.
 on:
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
-
-permissions:
-  contents: write
+  push:
+    branches: [main]
 
 concurrency:
   group: robo
@@ -15,27 +16,13 @@ concurrency:
 jobs:
   rodar:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 7
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-          path: codigo
-      - uses: actions/checkout@v4
-        with:
-          ref: dados
-          path: dados
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Rodar o robô (~4,5 min)
-        run: node codigo/bot/bot.mjs dados/estado.json
-      - name: Salvar o estado
+      - name: Checar oportunidades por ~4,5 minutos
         run: |
-          cd dados
-          git config user.name "robo-arbitragem"
-          git config user.email "robo-arbitragem@users.noreply.github.com"
-          git add estado.json
-          git commit -m "robô: rodada $(date -u +%Y-%m-%dT%H:%MZ)" || exit 0
-          git pull --rebase -q || true
-          git push
+          fim=$(( $(date +%s) + 270 ))
+          while [ $(date +%s) -lt $fim ]; do
+            curl -s -m 25 "https://radar-arbitragem.vercel.app/api/tick" || true
+            echo
+            sleep 15
+          done

@@ -1,35 +1,23 @@
-// GET  /api/robo            -> { ligado, alterado }
-// POST /api/robo {ligado}   -> liga ou desliga o robô 24h
-// O interruptor fica salvo no Vercel Blob (privado), então vale mesmo com a página fechada.
-import { put, get } from "@vercel/blob";
-
-const ARQ = "robo/interruptor.json";
-
-async function ler() {
-  try {
-    const r = await get(ARQ, { access: "private" });
-    if (!r || !r.stream) return { ligado: true, alterado: null };
-    const txt = await new Response(r.stream).text();
-    const d = JSON.parse(txt);
-    return { ligado: d.ligado !== false, alterado: d.alterado || null };
-  } catch {
-    return { ligado: true, alterado: null };
-  }
-}
+// GET  /api/robo           -> { ligado }
+// POST /api/robo {ligado}  -> liga ou desliga o robô (fica salvo no servidor)
+import { lerEstado, alterar } from "./_motor.js";
 
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
-  if (req.method === "POST") {
-    let corpo = req.body;
-    if (typeof corpo === "string") { try { corpo = JSON.parse(corpo); } catch { corpo = {}; } }
-    if (!corpo || typeof corpo.ligado !== "boolean") return res.status(400).json({ erro: "envie { ligado: true ou false }" });
-    const novo = { ligado: corpo.ligado, alterado: Date.now() };
-    try {
-      await put(ARQ, JSON.stringify(novo), { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: "application/json" });
-      return res.status(200).json(novo);
-    } catch (e) {
-      return res.status(500).json({ erro: "não consegui salvar: " + String(e.message || e).slice(0, 120) });
+  try {
+    if (req.method === "POST") {
+      let c = req.body;
+      if (typeof c === "string") { try { c = JSON.parse(c); } catch { c = {}; } }
+      if (!c || typeof c.ligado !== "boolean") return res.status(400).json({ erro: "envie { ligado: true ou false }" });
+      const out = await alterar(e => {
+        e.ligado = c.ligado;
+        e.log = e.log || [];
+        e.log.unshift({ t: Date.now(), txt: c.ligado ? "Robô ligado pelo painel." : "Robô desligado pelo painel: não faz novas compras (se houver USDT a caminho, termina a venda sem prejuízo).", tipo: c.ligado ? "good" : "warn" });
+        return { ligado: e.ligado, alterado: Date.now() };
+      });
+      return res.status(200).json(out);
     }
-  }
-  return res.status(200).json(await ler());
+    const { e } = await lerEstado();
+    res.status(200).json({ ligado: e.ligado !== false });
+  } catch (err) { res.status(500).json({ erro: String(err.message || err).slice(0, 200) }); }
 }

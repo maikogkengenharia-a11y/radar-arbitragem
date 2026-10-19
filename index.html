@@ -154,7 +154,7 @@ label.f{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--mu
 .toggle.on{background:var(--good);border-color:var(--good)}
 .toggle.on::after{left:27px;background:#04160b}
 .servidor .loc{display:none!important}
-.servidor [data-exec],.servidor #kGo,.servidor #btnRebal,.servidor .cx .mais,.servidor .strip .ed{display:none!important}
+.servidor #btnRebal,.servidor .cx .mais,.servidor .strip .ed{display:none!important}
 .srv{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .srv>div{background:var(--bg2);border:1px solid var(--rule);border-radius:12px;padding:12px}
 .srv b{display:block;font:500 17px var(--mono);margin-top:4px}
@@ -647,6 +647,13 @@ function calcRota(a, b, valor, livA, livB){
 }
 function motivoInviavel(r){
   if(r.faltou) return "livro curto para esse valor";
+  if(servidor){
+    const total = Object.values(sim.saldos).reduce((t, x) => t + x.brl, 0), min = servidor.config.minimo;
+    if(servidor.pendente) return "espere a operação em andamento terminar";
+    if(total < 50) return "sem reais no simulador";
+    if(r.lucro <= 0 || r.pct < min) return r.lucro <= 0 ? "daria prejuízo agora" : `abaixo do mínimo de ${nf(min, 2)}%`;
+    return "";
+  }
   if(sim.saldos[r.a].brl < r.valor) return `saldo em reais insuficiente na ${nome(r.a)}`;
   if(cfg.modo === "instantaneo" && sim.saldos[r.b].usdt < r.chega) return `falta USDT na ${nome(r.b)}`;
   if(r.pct < cfg.minimo) return r.lucro <= 0 ? "as taxas comem a diferença" : `abaixo do mínimo de ${nf(cfg.minimo)}%`;
@@ -807,7 +814,7 @@ function negociarAqui(c){
   const compra = rotas.filter(r => r.a === c && !r.faltou)[0], venda = rotas.filter(r => r.b === c && !r.faltou)[0];
   const linha = (r, tipo) => r ? `<div class="q"><div><small>${tipo === "c" ? `comprar aqui → vender na ${nome(r.b)}` : `comprar na ${nome(r.a)} → vender aqui`}</small>
     <b class="${r.lucro>0?"good":"bad"}">${pct(r.pct)} · ${RS(r.lucro)}</b></div>
-    <button class="go sm ${tipo === "v" ? "sell" : ""}" data-exec="${r.a}|${r.b}" ${emExecucao ? "disabled" : ""}>${tipo === "c" ? "Comprar" : "Vender"}</button></div>` : "";
+    <button class="go sm ${tipo === "v" ? "sell" : ""}" data-exec="${r.a}|${r.b}" ${emExecucao || (servidor && motivoInviavel(r)) ? "disabled" : ""}>${tipo === "c" ? "Comprar" : "Vender"}</button></div>` : "";
   const html = linha(compra, "c") + linha(venda, "v");
   return html ? `<div class="qt">${html}<div class="faint" style="font-size:11px">já com taxas · com ${R(+cfg.valor)}</div></div>` : "";
 }
@@ -847,7 +854,7 @@ function renderOps(){
       </div>
       <div class="spr">diferença ${pct(r.bruto, 4)} <span class="faint">·</span> taxas ${pct(r.bruto - r.pct, 4)}</div>
       <div class="why">${m ? esc(m) : `compra ${P4(r.medioCompra)} · venda ${P4(r.medioVenda)} · custos ${R(custo)} · com ${R(r.valor)}`}</div>
-      <button class="go" data-exec="${r.a}|${r.b}" ${emExecucao ? "disabled" : ""}>⚡ Executar</button>
+      <button class="go" data-exec="${r.a}|${r.b}" ${emExecucao || (servidor && m) ? "disabled" : ""}>${servidor && m ? "Aguardando lucro" : "⚡ Executar"}</button>
     </div>`;
   }).join("") : `<div class="empty">Sem rotas para mostrar. ${dados ? "Ative pelo menos duas corretoras em Configurações." : "Lendo preços…"}</div>`;
 }
@@ -859,6 +866,7 @@ let confRota = null;
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-exec]"); if(!b) return;
   const [a, c] = b.dataset.exec.split("|"), v = +$("#opValor").value || +cfg.valor;
+  if(servidor){ executarServidor(a, c, v); return; }
   if(cfg.semConfirmar && !emExecucao){
     // usa o dinheiro que você já tem; só coloca saldo novo se não houver nada
     const total = Object.keys(EX).reduce((t, x) => t + sim.saldos[x].brl, 0);
@@ -1315,7 +1323,7 @@ setInterval(() => { $("#relogio").textContent = new Date().toLocaleTimeString("p
 
 // ============================================================ robô 24h no servidor
 // O robô roda no GitHub Actions a cada 5 min e grava saldos, histórico e atividade neste arquivo.
-const SRV_URL = "https://raw.githubusercontent.com/maikogkengenharia-a11y/radar-arbitragem/dados/estado.json";
+const SRV_URL = "/api/estado";
 let servidor = null, roboLigado = null, roboAlterando = false;
 async function lerInterruptor(){
   try{ const r = await fetch("/api/robo?_=" + Date.now(), {cache:"no-store"}); if(r.ok){ const d = await r.json(); if(!roboAlterando) roboLigado = d.ligado !== false; } }catch(e){}
@@ -1336,7 +1344,8 @@ async function lerServidor(){
     const r = await fetch(SRV_URL + "?t=" + Date.now(), {cache:"no-store"});
     if(!r.ok) throw new Error("estado " + r.status);
     servidor = await r.json();
-    await lerInterruptor();
+    if(servidor.erro || !servidor.saldos) throw new Error(servidor.erro || "estado vazio");
+    if(!roboAlterando) roboLigado = servidor.ligado !== false;
     sim = { saldos: servidor.saldos, hist: servidor.hist || [], log: servidor.log || [], aportes: servidor.aportes || 0, criado: servidor.criado };
     for(const c of Object.keys(EX)) if(!sim.saldos[c]) sim.saldos[c] = {brl:0, usdt:0};
     document.documentElement.classList.add("servidor");
@@ -1372,11 +1381,89 @@ function renderServidor(){
     <div class="faint" style="font-size:12px;margin-top:10px">A página atualiza estes números sozinha a cada minuto. Para mudar mínimo, valor ou saldos do robô 24h, é só me pedir no chat.</div>`;
 }
 
+// ---------- execução manual no servidor (um clique)
+let opSrv = null;
+async function executarServidor(a, b, valor){
+  if(servidor && servidor.pendente){ toast("Já existe uma operação em andamento. Espere ela terminar.", "acc"); return; }
+  if(opSrv) return;
+  pedirNotificacao();
+  opSrv = { a, b, inicio: Date.now(), etapa: 1, desc: {} };
+  emExecucao = { auto: false }; renderOps(); if(dados) renderCotacoes();
+  $("#mExecEy").textContent = "Em execução"; $("#mExecT").textContent = "operação em andamento"; $("#mExecMin").textContent = "minimizar";
+  $("#mExecRota").textContent = `${nome(a)} → ${nome(b)}`; $("#mExecValor").textContent = R(valor); $("#mExecRes").innerHTML = "";
+  $("#mExec").hidden = false;
+  desenharSrv();
+  try{
+    const r = await fetch("/api/executar", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({a, b, valor})});
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.erro || "não executou");
+    opSrv.id = null; opSrv.valor = d.rota.valor; opSrv.chegaEm = d.rota.chegaEm; opSrv.previsto = d.rota.lucro;
+    $("#mExecValor").textContent = R(d.rota.valor);
+    opSrv.desc[1] = `Lucro previsto ${RS(d.rota.lucro)} (${pct(d.rota.pct)}) já com todas as taxas.`;
+    opSrv.etapa = 4; await lerServidor();
+    if(servidor && servidor.pendente) opSrv.id = servidor.pendente.id;
+    acompanharSrv();
+  }catch(err){
+    opSrv.desc[opSrv.etapa] = "Não executado: " + err.message; desenharSrv(true);
+    $("#mExecRes").innerHTML = `<div class="result neg"><div class="eyebrow">Não executado</div><div style="font-size:13px;margin-top:4px">${esc(err.message)}</div></div>`;
+    $("#mExecEy").textContent = "Não executado"; $("#mExecMin").textContent = "fechar";
+    opSrv = null; emExecucao = null; renderOps(); if(dados) renderCotacoes();
+  }
+}
+const PASSOS_S = [["preparar","Operação criada."],["verificar preços","Lendo os livros de ofertas e conferindo o lucro com taxas…"],["levar os reais","Juntando os reais na corretora de compra (Pix simulado)…"],["comprar cripto","Comprando USDT…"],["saque","Enviando o USDT…"],["aguardar depósito",""],["vender cripto",""],["concluído",""]];
+function desenharSrv(falhou){
+  const o = opSrv; if(!o) return;
+  $("#mExecSteps").innerHTML = PASSOS_S.map(([t, d], i) => {
+    const cls = i < o.etapa ? "done" : i === o.etapa ? (falhou ? "fail" : "run") : "";
+    const txt = o.desc[i] || (i <= o.etapa ? d : "");
+    return `<div class="step ${cls}"><span class="ic">${i < o.etapa ? "✓" : falhou && i === o.etapa ? "!" : ""}</span><div><div class="tt">${t}</div>${txt ? `<div class="ds">${esc(txt)}</div>` : ""}</div></div>`;
+  }).join("");
+}
+async function acompanharSrv(){
+  const o = opSrv; if(!o) return;
+  const p = servidor && servidor.pendente;
+  o.desc[2] = "Reais prontos na corretora de compra."; o.desc[3] = p ? `Comprou ${nf(p.usdt)} USDT na ${nome(p.a)} a ${P4(p.medioCompra)}.` : "Comprado.";
+  o.desc[4] = p ? `Enviando para a ${nome(p.b)}. Chegam ${nf(p.chega)} USDT.` : "Enviado.";
+  o.etapa = 5;
+  const relogio = setInterval(() => { const s = Math.floor((Date.now()-o.inicio)/1000); $("#mExecTempo").textContent = `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`; }, 500);
+  while(opSrv === o){
+    const falta = Math.ceil((o.chegaEm - Date.now())/1000);
+    if(falta > 0){ o.etapa = 5; o.desc[5] = `Aguardando confirmação na ${nome(o.b)}… ${falta}s`; desenharSrv(); await dorme(1000); continue; }
+    o.etapa = 6; o.desc[5] = "USDT chegou."; desenharSrv();
+    try{ await fetch("/api/tick", {cache:"no-store"}); }catch(e){}
+    await lerServidor();
+    const h = servidor && servidor.hist.find(x => x.id === o.id);
+    if(h){
+      o.desc[6] = `Vendeu a ${P4(h.venda)}. Recebido: ${R(h.final)}.`; o.desc[7] = `Lucro: ${RS(h.lucro)} (${pct(h.pct)}).`; o.etapa = 8; desenharSrv();
+      $("#mExecRes").innerHTML = `<div class="result ${h.lucro < 0 ? "neg" : ""}"><div class="eyebrow">Operação concluída</div>
+        <div class="kv"><span>Investido</span><span>${R(h.valor)}</span></div><div class="kv"><span>Recebido</span><span>${R(h.final)}</span></div>
+        <div class="kv"><span>Previsto na entrada</span><span>${RS(h.previsto || 0)}</span></div>
+        <div class="kv"><span>Resultado</span><span class="${h.lucro >= 0 ? "good" : "bad"}">${RS(h.lucro)} (${pct(h.pct)})</span></div></div>`;
+      $("#mExecEy").textContent = "Concluída"; $("#mExecT").textContent = "operação concluída"; $("#mExecMin").textContent = "fechar";
+      toast(`${nome(h.a)} → ${nome(h.b)} concluída: ${RS(h.lucro)}`); notificar("Operação concluída (simulação)", `${nome(h.a)} → ${nome(h.b)}: ${RS(h.lucro)}`);
+      break;
+    }
+    const pp = servidor && servidor.pendente;
+    if(pp && pp.segurandoDesde){
+      o.desc[6] = `O preço piorou. Segurando o USDT na ${nome(o.b)} para não vender no prejuízo; vende assim que der. Pode fechar esta janela: o servidor continua cuidando.`;
+      desenharSrv(); $("#mExecEy").textContent = "Segurando";
+    } else { o.desc[6] = `Vendendo na ${nome(o.b)}…`; desenharSrv(); }
+    await dorme(5000);
+  }
+  clearInterval(relogio);
+  if(opSrv === o){ opSrv = null; emExecucao = null; renderOps(); if(dados) renderCotacoes(); }
+}
+$("#mExecMin").addEventListener("click", () => {
+  if(opSrv && opSrv.etapa >= 5){ toast("A operação continua no servidor, mesmo se fechar a página. O resultado aparece no Histórico.", "acc"); opSrv = null; emExecucao = null; renderOps(); }
+});
+
 // ============================================================ início
 $("#opValor").value = cfg.valor;
 saudacao(); irPara(); renderStrip();
 ler_precos(); setInterval(ler_precos, POLL_MS);
-lerServidor(); setInterval(lerServidor, 60000); setInterval(renderServidor, 15000);
+lerServidor(); setInterval(lerServidor, 15000); setInterval(renderServidor, 15000);
+// com a página aberta, ela também faz o robô checar (além do GitHub a cada 5 min)
+setInterval(() => { if(servidor && !document.hidden) fetch("/api/tick", {cache:"no-store"}).catch(() => {}); }, 20000);
 setTimeout(() => { if(!servidor) retomarPendente(); }, 3000);
 </script>
 </body>
