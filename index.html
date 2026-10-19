@@ -417,6 +417,7 @@ svg text{fill:var(--muted);font:10px var(--mono)}
           <label class="f">Tempo da transferência (min)<input id="cfTempo" type="number" min="0" max="60" step="1" class="num"></label>
         </div>
         <label class="f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="cfAcelerar"> Acelerar a simulação (a transferência leva 10 segundos em vez do tempo real)</label>
+        <label class="f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="cfDireto"> Executar com um clique, sem a janela de confirmação (os reais são trazidos sozinhos)</label>
       </div>
       <div class="card" style="display:flex;flex-direction:column;gap:12px">
         <div class="eyebrow">Corretoras, taxas e saque do USDT</div>
@@ -474,7 +475,8 @@ svg text{fill:var(--muted);font:10px var(--mono)}
     <label class="f">Valor da operação (R$)<input id="mConfValor" type="number" min="50" step="100" class="num" style="font-size:20px;padding:12px"></label>
     <div class="kv"><span>Saldo disponível na corretora de compra</span><span id="mConfSaldo"></span></div>
     <div id="mConfAviso"></div>
-    <div class="banner">Simulação: usa preços reais, mas o dinheiro é virtual. Os preços podem mudar entre o cálculo e a execução.</div>
+    <label class="f" style="flex-direction:row;align-items:center;gap:8px;color:var(--fg)"><input type="checkbox" id="mConfDireto"> Nas próximas vezes, executar direto com um clique (sem esta janela)</label>
+    <div class="faint" style="font-size:12px">Simulação: preços reais, dinheiro virtual. O preço pode mudar entre o cálculo e a execução.</div>
     <div class="row" style="justify-content:flex-end"><button data-fechar>Cancelar</button><button class="go" id="mConfGo">Executar agora</button></div>
   </div>
 </div>
@@ -838,7 +840,14 @@ $("#opFiltro").addEventListener("change", renderOps);
 let confRota = null;
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-exec]"); if(!b) return;
-  const [a, c] = b.dataset.exec.split("|"); abrirConfirmar(a, c, +$("#opValor").value || +cfg.valor);
+  const [a, c] = b.dataset.exec.split("|"), v = +$("#opValor").value || +cfg.valor;
+  if(cfg.semConfirmar && !emExecucao){
+    // usa o dinheiro que você já tem; só coloca saldo novo se não houver nada
+    const total = Object.keys(EX).reduce((t, x) => t + sim.saldos[x].brl, 0);
+    const valor = total >= 50 ? Math.floor(Math.min(v, total)*100)/100 : v;
+    pedirNotificacao(); prepararSaldo(a, valor); executar(a, c, valor, false); return;
+  }
+  abrirConfirmar(a, c, v);
 });
 function abrirConfirmar(a, b, valor){
   if(emExecucao){ toast("Já existe uma operação em andamento.", "acc"); return; }
@@ -855,23 +864,34 @@ function atualizarConfirmar(){
   $("#mConfLucro").textContent = r ? RS(r.lucro) : "—"; $("#mConfLucro").className = r && r.lucro > 0 ? "good" : "bad";
   $("#mConfSaldo").textContent = `${R(sim.saldos[a].brl)} · ${nf(sim.saldos[a].usdt)} USDT`;
   const m = r ? motivoInviavel(r) : "sem preço";
-  const bloqueia = v < 50 || sim.saldos[a].brl < v || (cfg.modo === "instantaneo" && r && sim.saldos[b].usdt < r.chega);
+  const bloqueia = v < 50 || (cfg.modo === "instantaneo" && r && sim.saldos[b].usdt < r.chega);
   let aviso = "";
   if(v < 50) aviso = `<div class="banner">Mínimo de R$ 50 por operação.</div>`;
-  else if(sim.saldos[a].brl < v){
-    const falta = v - sim.saldos[a].brl;
-    const onde = Object.keys(EX).filter(c => c !== a && sim.saldos[c].brl >= 1).sort((x, y) => sim.saldos[y].brl - sim.saldos[x].brl);
-    const totalFora = onde.reduce((t, c) => t + sim.saldos[c].brl, 0);
-    aviso = `<div class="banner">Faltam ${R(falta)} em reais na ${nome(a)}.${onde.length ? ` Seu dinheiro está em: ${onde.slice(0,3).map(c => `${nome(c)} (${R(sim.saldos[c].brl)})`).join(", ")}.` : ""}</div>
-      <div class="row">${totalFora >= falta ? `<button class="go sm sell" id="mConfPix">Trazer ${R(falta)} por Pix (simulado)</button>` : ""}
-      <button class="go sm" id="mConfDep">Colocar ${R(falta)} na ${nome(a)}</button></div>`;
+  else{
+    if(sim.saldos[a].brl < v) aviso += `<div class="banner info">✓ ${esc(planoSaldo(a, v))}</div>`;
+    if(cfg.modo === "instantaneo" && r && sim.saldos[b].usdt < r.chega) aviso += `<div class="banner">Falta USDT na ${nome(b)} para vender na hora. Mude para "Transferindo" em Configurações ou coloque USDT lá.</div>`;
+    if(r && r.lucro <= 0) aviso += `<div class="banner">Agora essa rota dá prejuízo (${RS(r.lucro)}). Quando ficar verde, é só clicar em Executar: o resto é automático.</div>`;
   }
-  else if(bloqueia) aviso = `<div class="banner">${esc(m)}. Ajuste o valor ou coloque USDT na ${nome(b)}.</div>`;
-  else if(m) aviso = `<div class="banner">${esc(m)}. Você pode executar mesmo assim para ver o resultado.</div>`;
   $("#mConfAviso").innerHTML = aviso;
   $("#mConfGo").disabled = !!bloqueia;
 }
 $("#mConfValor").addEventListener("input", atualizarConfirmar);
+// o que vai acontecer com o saldo antes de comprar
+function planoSaldo(a, v){
+  const falta = v - sim.saldos[a].brl; if(falta <= 0.004) return "";
+  const fora = Object.keys(EX).filter(c => c !== a).reduce((t, c) => t + sim.saldos[c].brl, 0);
+  const de = Object.keys(EX).filter(c => c !== a && sim.saldos[c].brl >= 1).sort((x, y) => sim.saldos[y].brl - sim.saldos[x].brl).slice(0, 2).map(nome).join(" e ");
+  if(fora >= falta) return `Ao executar, trago ${R(falta)} da ${de} para a ${nome(a)} por Pix (simulado) e já compro.`;
+  return `Ao executar, ${fora > 0 ? `trago ${R(fora)} da ${de} e ` : ""}coloco ${R(falta - fora)} de saldo novo na ${nome(a)} para completar.`;
+}
+function prepararSaldo(a, v){
+  const falta = v - sim.saldos[a].brl; if(falta <= 0.004) return;
+  const mv = puxarReais(a, falta);
+  if(mv > 0) registrarLog(`Pix simulado: ${R(mv)} levados para a ${nome(a)}`, "acc");
+  const resto = v - sim.saldos[a].brl;
+  if(resto > 0.004){ sim.saldos[a].brl += resto; sim.aportes = (sim.aportes || 0) + resto; salvarSim(); registrarLog(`Saldo novo colocado: ${R(resto)} na ${nome(a)}`, "acc"); }
+  renderStrip();
+}
 // move reais de outras corretoras para 'para' (Pix simulado); devolve quanto conseguiu mover
 function puxarReais(para, quanto){
   let falta = quanto, movido = 0;
@@ -889,7 +909,9 @@ document.addEventListener("click", e => {
 document.querySelectorAll("[data-fechar]").forEach(b => b.addEventListener("click", () => $("#mConf").hidden = true));
 function pedirNotificacao(){ try{ if("Notification" in window && Notification.permission === "default") Notification.requestPermission(); }catch(e){} }
 function notificar(titulo, corpo){ try{ if("Notification" in window && Notification.permission === "granted" && document.hidden) new Notification(titulo, {body: corpo}); }catch(e){} }
-$("#mConfGo").addEventListener("click", () => { pedirNotificacao(); $("#mConf").hidden = true; executar(confRota.a, confRota.b, +$("#mConfValor").value, false); });
+$("#mConfGo").addEventListener("click", () => { pedirNotificacao();
+  if($("#mConfDireto").checked){ cfg.semConfirmar = true; gravar("mesa_cfg", cfg); toast("Pronto: das próximas vezes o Executar já faz tudo direto. Dá para desligar em Configurações.", "acc"); }
+  prepararSaldo(confRota.a, +$("#mConfValor").value); $("#mConf").hidden = true; executar(confRota.a, confRota.b, +$("#mConfValor").value, false); });
 $("#mExecMin").addEventListener("click", () => { $("#mExec").hidden = true; if(emExecucao) toast("A operação continua rodando. Ela aparece no Histórico quando terminar.", "acc"); });
 
 const PASSOS_T = [
@@ -1209,7 +1231,7 @@ $("#tMes").addEventListener("change", renderImpostos);
 // ============================================================ 07 configurações
 function renderConfig(){
   $("#cfValor").value = cfg.valor; $("#cfMin").value = cfg.minimo; $("#cfModo").value = cfg.modo;
-  $("#cfTempo").value = cfg.tempo; $("#cfAcelerar").checked = !!cfg.acelerar;
+  $("#cfTempo").value = cfg.tempo; $("#cfAcelerar").checked = !!cfg.acelerar; $("#cfDireto").checked = !!cfg.semConfirmar;
   $("#cfIniBrl").value = cfg.iniBrl; $("#cfIniUsdt").value = cfg.iniUsdt;
   $("#cfEx").innerHTML = Object.keys(EX).map(c => `<div class="fx">
     <b>${nome(c)}</b>
@@ -1223,7 +1245,7 @@ function renderConfig(){
 $("#cfSalvar").addEventListener("click", () => {
   const novo = clone(cfg);
   novo.valor = Math.max(+$("#cfValor").value || 5000, 50); novo.minimo = +$("#cfMin").value || 0; novo.modo = $("#cfModo").value;
-  novo.tempo = Math.min(Math.max(+$("#cfTempo").value || 0, 0), 60); novo.acelerar = $("#cfAcelerar").checked;
+  novo.tempo = Math.min(Math.max(+$("#cfTempo").value || 0, 0), 60); novo.acelerar = $("#cfAcelerar").checked; novo.semConfirmar = $("#cfDireto").checked;
   novo.iniBrl = Math.max(+$("#cfIniBrl").value || 0, 0); novo.iniUsdt = Math.max(+$("#cfIniUsdt").value || 0, 0);
   novo.corretoras = Object.keys(EX).filter(c => document.querySelector(`[data-on="${c}"]`).checked);
   document.querySelectorAll("[data-tx]").forEach(i => novo.taxas[i.dataset.tx] = Math.max(+i.value || 0, 0));
