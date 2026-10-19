@@ -29,6 +29,7 @@ export default async function handler(req, res) {
     }
   }));
 
+  if (Object.keys(erros).length) console.log("erros:", JSON.stringify(erros));
   const cot = await cotacao(binanceBruto);
   res.setHeader("Cache-Control", "public, s-maxage=3, stale-while-revalidate=2");
   res.status(200).json({ precos, erros, cotacao: cot, t: Date.now() / 1000, regiao: process.env.VERCEL_REGION || "local" });
