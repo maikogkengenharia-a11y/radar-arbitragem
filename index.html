@@ -733,7 +733,7 @@ function renderStrip(){
   const ganho = tot - (sim.aportes || 0);
   const cel = cs.map(c => { const s = sim.saldos[c];
     return `<button class="cel" data-saldo="${c}" title="Alterar o saldo da ${nome(c)}"><div class="eyebrow">${nome(c)} <span class="ed">✎ editar</span></div><div class="v">${R(s.brl)}</div><div class="v2">${nf(s.usdt)} USDT</div></button>`; }).join("");
-  $("#strip").innerHTML = (cel || `<div class="vazio">Nenhum saldo ainda. Clique numa corretora abaixo para colocar saldo e simular.</div>`)
+  $("#strip").innerHTML = (cel || `<div class="vazio">${REAL ? "Sem saldo real ainda. Para começar, faça um Pix para a sua conta da Binance: o saldo aparece aqui sozinho." : "Nenhum saldo ainda. Clique numa corretora abaixo para colocar saldo e simular."}</div>`)
     + `<div class="tot"><div class="eyebrow">Total (${REAL ? "real" : "virtual"})</div><div class="v">${R(tot)}</div><div class="v2 ${ganho>=0?"good":"bad"}">${RS(ganho)} com as negociações</div></div>
     <div class="tot" style="display:flex;align-items:center"><button id="btnRebal" title="Simula transferir reais por Pix para deixar o mesmo valor em cada corretora conectada" ${emExecucao || !cs.length ? "disabled" : ""}>Redistribuir reais</button></div>`;
   renderConexoes();
