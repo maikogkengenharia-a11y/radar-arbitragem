@@ -303,14 +303,15 @@ async function avaliar() {
   const cfg = E.config, sb = E.saldos?.binance, sc = E.saldos?.carteira;
   const out = { t: agora(), taxa: fee, saque: N.taxa, ask: L.asks[0]?.[0], bid: L.bids[0]?.[0] };
   // Rota A
-  const vA = Math.floor(Math.min(cfg.max, sb ? sb.BRL : cfg.max) * 100) / 100;
-  if (vA >= cfg.minValor) {
+  const vAreal = Math.floor(Math.min(cfg.max, sb ? sb.BRL : 0) * 100) / 100;
+  const vA = vAreal >= cfg.minValor ? vAreal : cfg.max;
+  {
     const g = gastar(L.asks, vA);
     const u = g ? g.usdt * (1 - fee) - N.taxa : 0;
     if (u > 0) {
       const k = await kyRota(USDT, BRLA, u);
       const lucro = k.saida - vA - GAS_BRL;
-      out.A = { valor: vA, usdt: u, recebe: k.saida, lucro, pct: (lucro / vA) * 100, hipotetico: !sb };
+      out.A = { valor: vA, usdt: u, recebe: k.saida, lucro, pct: (lucro / vA) * 100, hipotetico: vAreal < cfg.minValor };
     }
   }
   // Rota B
@@ -580,7 +581,7 @@ async function ciclo() {
   E.aval = await avaliar();
   const cfg = E.config;
   const cands = ["A", "B"].map(k => E.aval[k] && { tipo: k, ...E.aval[k] })
-    .filter(a => a && !a.hipotetico && a.lucro > 0 && a.pct >= cfg.minimo)
+    .filter(a => a && (!a.hipotetico || E.modo === "observar") && a.lucro > 0 && a.pct >= cfg.minimo)
     .sort((x, y) => y.pct - x.pct);
   const melhor = cands[0];
   if (!E.ligado || !melhor) return;
