@@ -397,14 +397,15 @@ async function avancar(op) {
     case "sacar": {
       const N = await rede();
       if (!N.saqueOk) { log("Binance está com saques de USDT pela Polygon pausados; aguardando", "aviso"); return; }
-      const hist = await bn("GET", "/sapi/v1/capital/withdraw/history", { coin: "USDT", withdrawOrderId: op.id });
+      const wid = op.wid || op.id;
+      const hist = await bn("GET", "/sapi/v1/capital/withdraw/history", { coin: "USDT", withdrawOrderId: wid });
       if (!hist.length) {
         const livre = (await saldosBinance()).USDT;
         const qtd = baixo(Math.min(op.usdtComprado, livre), N.multiplo);
         if (qtd < N.min) throw new Error(`valor abaixo do saque mínimo da Binance (${N.min} USDT)`);
         op.usdtAntes = (await saldosCarteira()).USDT;
         await bn("POST", "/sapi/v1/capital/withdraw/apply", {
-          coin: "USDT", network: N.rede, address: CARTEIRA.address, amount: qtd, withdrawOrderId: op.id,
+          coin: "USDT", network: N.rede, address: CARTEIRA.address, amount: qtd, withdrawOrderId: wid,
         });
         op.saque = qtd; op.taxaSaque = N.taxa;
         log(`Saque de ${qtd} USDT pedido na Binance (taxa ${N.taxa} USDT)`);
@@ -413,11 +414,11 @@ async function avancar(op) {
       break;
     }
     case "chegando": {
-      const [w] = await bn("GET", "/sapi/v1/capital/withdraw/history", { coin: "USDT", withdrawOrderId: op.id });
+      const [w] = await bn("GET", "/sapi/v1/capital/withdraw/history", { coin: "USDT", withdrawOrderId: op.wid || op.id });
       if (!w) return;
       if ([1, 3, 5].includes(+w.status)) {
         log("A Binance recusou/cancelou o saque. O USDT ficou na Binance: vou vendê-lo de volta só quando não der prejuízo.", "aviso");
-        op.usdtBinance = op.usdtComprado; op.brlAcum = 0; op.n = 0;
+        op.usdtBinance = op.usdtComprado; op.brlAcum = op.brlAcum || 0; op.n = op.n || 0;
         op.etapa = "vender_binance";
         break;
       }
@@ -437,10 +438,23 @@ async function avancar(op) {
       const quer = ethers.parseUnits(op.usdtChegou.toFixed(6), 6);
       const wei = quer < c.usdtWei ? quer : c.usdtWei;
       if (wei <= 0n) throw new Error("carteira sem USDT para vender");
-      const minimo = op.custo + GAS_BRL; // nunca abaixo do que custou
+      const falta = op.custo - (op.brlAcum || 0);
+      const minimo = falta + GAS_BRL; // nunca abaixo do que custou
       const h = await iniciarTroca(op, USDT, BRLA, wei, minimo);
       if (!h) {
-        segurando(op, `Segurando USDT: a venda agora daria R$ ${r2(op.cotacao)} e o custo foi R$ ${r2(op.custo)}. Espero o preço melhorar.`);
+        // caminho alternativo: mandar o USDT para a Binance e vender lá, se der lucro
+        if (!op.redirecionado) {
+          const [L, fee] = await Promise.all([livro(), taxa()]);
+          const u = +ethers.formatUnits(wei, 6), v = vender(L.bids, u);
+          const brl = v ? v.brl * (1 - fee) : 0;
+          if (brl >= falta + GAS_BRL * 2) {
+            op.redirecionado = true; op.usdt = u; delete op.cotacao;
+            log(`Redirecionando: vender na KyberSwap daria prejuízo, mas na Binance dá R$ ${r2(brl)} (custo R$ ${r2(falta)}). Mandando o USDT para a Binance.`, "op");
+            op.etapa = "depositar";
+            break;
+          }
+        }
+        segurando(op, `Segurando USDT: a venda agora daria R$ ${r2(op.cotacao)} e o custo foi R$ ${r2(falta)}. Espero o preço melhorar (ou a Binance pagar mais).`);
         return;
       }
       op.etapa = "vender_conf";
@@ -452,7 +466,7 @@ async function avancar(op) {
       if (r.falhou) { limparTx(op); op.etapa = "vender"; break; }
       op.gasPol = (op.gasPol || 0) + r.gasPol;
       limparTx(op);
-      finalizar(op, r.saida);
+      finalizar(op, r.saida + (op.brlAcum || 0), op.redirecionado ? { redirecionado: true } : {});
       return;
     }
     // ---------------- ROTA B
@@ -514,7 +528,7 @@ async function avancar(op) {
       const lista = await bn("GET", "/sapi/v1/capital/deposit/hisrec", { coin: "USDT", limit: 50 });
       const d = lista.find(x => String(x.txId || "").toLowerCase() === op.txDeposito.toLowerCase());
       if (!d || ![1, 6].includes(+d.status)) return;
-      op.usdtBinance = +d.amount; op.brlAcum = 0; op.n = 0;
+      op.usdtBinance = +d.amount; op.brlAcum = op.brlAcum || 0; op.n = op.n || 0;
       log(`Binance creditou ${d.amount} USDT`);
       op.etapa = "vender_binance";
       break;
@@ -535,6 +549,19 @@ async function avancar(op) {
         }
         const precoMin = cima(falta / (qtd * (1 - fee)), R.tick); // vender abaixo disso daria prejuízo
         if (melhor < precoMin) {
+          // caminho alternativo: sacar para a carteira e vender por BRLA na KyberSwap, se der lucro
+          if (!op.redirecionado) {
+            const N = await rede().catch(() => null);
+            const chega = N ? qtd - N.taxa : 0;
+            const k = chega > 0 && N && N.saqueOk ? await kyRota(USDT, BRLA, chega).catch(() => null) : null;
+            if (k && k.saida >= falta + GAS_BRL) {
+              op.redirecionado = true; op.usdtComprado = qtd; op.wid = `${op.id}r`;
+              log(`Redirecionando: vender na Binance daria prejuízo, mas na KyberSwap dá R$ ${r2(k.saida)} (custo R$ ${r2(falta)}). Sacando o USDT para a carteira.`, "op");
+              op.etapa = "sacar";
+              if (E.op && op.etapa !== "vender_binance") { op.etapaEm = agora(); delete op.segurandoDesde; delete op.segurandoMsg; delete op.avisoEm; }
+              return;
+            }
+          }
           segurando(op, `Segurando ${qtd} USDT na Binance: o melhor preço agora é R$ ${melhor} e preciso de pelo menos R$ ${precoMin} para não ter prejuízo.`);
           return;
         }

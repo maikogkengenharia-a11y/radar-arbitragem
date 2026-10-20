@@ -59,6 +59,12 @@ function migrar(e) {
     e.taxasVersao = 3;
     e.log.unshift({ t: Date.now(), txt: `Nova simulação: R$ 5.000 na Binance, lucro mínimo 0,02% já com todas as taxas, até R$ 5.000 por operação. Rodada anterior (R$ 1.000): ${h.length} operações, ${RS(soma)}; a operação que estava segurando USDT foi encerrada.`, tipo: "good" });
   }
+  if ((e.taxasVersao || 0) < 4) {
+    // 20/10: dividir o capital para pegar até 2 oportunidades ao mesmo tempo
+    e.config.max = 2500;
+    e.taxasVersao = 4;
+    log(e, "Regra nova: até R$ 2.500 por operação (com R$ 5.000 dá para 2 ao mesmo tempo). Se o USDT ficar preso, o robô procura outra corretora onde a venda dê lucro.", "acc");
+  }
 }
 const MAX_SIMULTANEAS = 3;
 // várias operações ao mesmo tempo; "pendente" continua existindo (a mais antiga) para o painel
