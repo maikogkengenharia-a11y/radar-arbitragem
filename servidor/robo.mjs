@@ -8,6 +8,7 @@ import fs from "node:fs";
 import http from "node:http";
 import crypto from "node:crypto";
 import { ethers } from "ethers";
+import { radar, NOME } from "./radar.mjs";
 
 const CONF = process.env.ROBO_CONF || "/etc/robo";
 const DADOS = process.env.ROBO_DADOS || "/var/lib/robo";
@@ -49,7 +50,7 @@ let ENV = lerEnv();
 const CARTEIRA = new ethers.Wallet(fs.readFileSync(`${CONF}/carteira.key`, "utf8").trim());
 
 const CONFIG_PADRAO = { max: 200, minimo: 0.02, minValor: 20, intervaloSeg: 15, pausaEntreOpsSeg: 60 };
-const PADRAO = { ligado: false, modo: "observar", config: CONFIG_PADRAO, op: null, hist: [], simulados: [], log: [], aval: null, saldos: null, fimUltimaOp: 0 };
+const PADRAO = { ligado: false, modo: "observar", config: CONFIG_PADRAO, op: null, hist: [], simulados: [], log: [], aval: null, saldos: null, fimUltimaOp: 0, radar: null, radarStats: {}, radarDesde: 0 };
 fs.mkdirSync(DADOS, { recursive: true });
 let E;
 try { E = { ...structuredClone(PADRAO), ...JSON.parse(fs.readFileSync(ARQ, "utf8")) }; }
@@ -570,8 +571,25 @@ function novaOp(tipo, a) {
   };
 }
 
+// radar de todas as corretoras: a cada 30 s, e conta quantas vezes cada rota passou do lucro mínimo
+let radarEm = 0;
+async function rodarRadar() {
+  if (agora() - radarEm < 30e3) return;
+  radarEm = agora();
+  const R = await radar(E.config.max);
+  E.radar = { ...R, rotas: R.rotas.slice(0, 15) };
+  if (!E.radarDesde) E.radarDesde = agora();
+  for (const r of R.rotas) {
+    const k = `${r.a}>${r.b}`;
+    const st = E.radarStats[k] || (E.radarStats[k] = { a: r.a, b: r.b, vezes: 0, melhor: -99, ultima: 0, soma: 0 });
+    if (r.pct > st.melhor) st.melhor = r.pct;
+    if (r.pct >= E.config.minimo && r.lucro > 0 && agora() - st.ultima > 60e3) { st.vezes++; st.ultima = agora(); st.soma = r2(st.soma + r.lucro); }
+  }
+}
+
 async function ciclo() {
   ENV = lerEnv();
+  try { await rodarRadar(); } catch (e) { console.log("radar:", msg(e)); }
   await atualizarSaldos();
   if (E.op) {
     if (!E.ligado) return;               // desligado = pausa tudo, inclusive operação em andamento
@@ -644,7 +662,8 @@ function publico() {
   if (op) delete op.txAssinada;
   return {
     ligado: E.ligado, modo: E.modo, config: E.config, carteira: CARTEIRA.address, chaves: !!(ENV.BINANCE_KEY && ENV.BINANCE_SECRET),
-    saldos: E.saldos, aval: E.aval, op, hist: E.hist.slice(0, 60), simulados: E.simulados.slice(0, 40), log: E.log.slice(0, 80),
+    saldos: E.saldos, aval: E.aval, op, radar: E.radar, radarDesde: E.radarDesde, nomes: NOME,
+    radarStats: Object.values(E.radarStats).filter(x => x.vezes > 0 || x.melhor > -0.3).sort((x, y) => y.vezes - x.vezes || y.melhor - x.melhor).slice(0, 20), hist: E.hist.slice(0, 60), simulados: E.simulados.slice(0, 40), log: E.log.slice(0, 80),
     atualizado: E.atualizado, agora: agora(),
   };
 }

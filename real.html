@@ -144,6 +144,18 @@ h1{font:400 34px/1.1 var(--serif);margin:0 0 4px;letter-spacing:-.01em}
         <div id="op" style="margin-top:6px"></div>
       </div>
 
+      <div class="card s6">
+        <div class="row between"><div class="eyebrow">Todas as corretoras agora</div><div class="faint" style="font-size:12px" id="radarInfo"></div></div>
+        <div class="list" id="radar" style="margin-top:6px"></div>
+        <div class="faint" style="font-size:12px;margin-top:6px">Só observação, com as taxas de cada corretora. <span class="tag" style="background:var(--good-soft);color:var(--good)">robô</span> = rota que o robô já opera de verdade.</div>
+      </div>
+
+      <div class="card s6">
+        <div class="row between"><div class="eyebrow">Quantas vezes deu lucro</div><div class="faint" style="font-size:12px" id="statsInfo"></div></div>
+        <div class="list" id="stats" style="margin-top:6px"></div>
+        <div class="faint" style="font-size:12px;margin-top:6px">Conta no máximo 1 vez por minuto cada rota que passou do lucro mínimo. É isso que mostra em qual corretora vale abrir conta.</div>
+      </div>
+
       <div class="card s8">
         <div class="row between"><div class="eyebrow">Operações reais</div><div class="num" id="histTotal"></div></div>
         <div class="list" id="hist" style="margin-top:6px"></div>
@@ -266,6 +278,20 @@ function mostrar() {
       ${op.segurandoMsg ? `<div class="note warn">${esc(op.segurandoMsg)}</div>` : ""}
       ${op.erro ? `<div class="note bad">Último erro: ${esc(op.erro)} (o robô tenta de novo sozinho)</div>` : ""}`;
   }
+
+  // radar de todas as corretoras
+  const N = d.nomes || {}, nm = c => esc(N[c] || c).replace(" (Picnic/Avenia/Chainless)", "");
+  const rd = d.radar;
+  if (rd) {
+    $("#radarInfo").textContent = `com ${brl(rd.valor)} · ${hora(rd.t)}`;
+    $("#radar").innerHTML = rd.rotas.slice(0, 10).map(r => {
+      const cor = r.lucro > 0 && r.pct >= d.config.minimo ? "good" : r.lucro > 0 ? "warn" : "bad";
+      return `<div class="item"><span class="tag" ${r.real ? 'style="background:var(--good-soft);color:var(--good)"' : ""}>${r.real ? "robô" : "obs"}</span><div>${nm(r.a)} → ${nm(r.b)}</div><div class="num ${cor}" style="text-align:right">${r.lucro >= 0 ? "+" : ""}${brl(r.lucro)}<div style="font-size:12px">${nf(r.pct, 3)}%</div></div></div>`;
+    }).join("") + (Object.keys(rd.erros || {}).length ? `<div class="faint" style="font-size:12px;padding-top:6px">Sem resposta agora: ${Object.keys(rd.erros).map(nm).join(", ")}</div>` : "");
+  } else $("#radar").innerHTML = `<div class="muted">Carregando as corretoras…</div>`;
+  const st = d.radarStats || [];
+  $("#statsInfo").textContent = d.radarDesde ? "desde " + hora(d.radarDesde) : "";
+  $("#stats").innerHTML = st.length ? st.slice(0, 10).map(x => `<div class="item"><span class="tag">${x.vezes}×</span><div>${nm(x.a)} → ${nm(x.b)}<div class="faint" style="font-size:12px">melhor ${nf(x.melhor, 3)}%${x.vezes ? ` · somaria ${brl(x.soma)}` : ""}</div></div><div class="num ${x.vezes ? "good" : "faint"}">${x.vezes ? "deu lucro" : "ainda não"}</div></div>`).join("") : `<div class="muted">Juntando dados…</div>`;
 
   // histórico
   const h = d.hist || [];
