@@ -936,6 +936,21 @@ http.createServer(async (req, res) => {
 
 loop();
 
+// cópia de segurança diária dos resultados (simulador e robô real), guardando os últimos 60 dias
+function backupDiario() {
+  try {
+    const dir = `${DADOS}/backup`, dia = new Date().toISOString().slice(0, 10);
+    fs.mkdirSync(dir, { recursive: true });
+    for (const nome of ["simulador.json", "estado.json"]) {
+      const de = `${DADOS}/${nome}`, para = `${dir}/${dia}-${nome}`;
+      if (fs.existsSync(de) && !fs.existsSync(para)) fs.copyFileSync(de, para);
+    }
+    const velhos = fs.readdirSync(dir).sort().slice(0, -120);
+    for (const f of velhos) fs.unlinkSync(`${dir}/${f}`);
+  } catch (e) { console.log("backup:", msg(e)); }
+}
+backupDiario(); setInterval(backupDiario, 3600e3);
+
 // simulador: uma checagem a cada 15 s, 24h (substitui o GitHub Actions + Vercel Blob)
 let simOcupado = false;
 setInterval(async () => {
