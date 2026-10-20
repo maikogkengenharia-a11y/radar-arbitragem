@@ -651,6 +651,13 @@ http.createServer(async (req, res) => {
   const enviar = (c, o) => { res.writeHead(c, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" }); res.end(JSON.stringify(o)); };
   try {
     const url = new URL(req.url, "http://x");
+    // a própria página do painel do robô, servida direto pelo servidor
+    if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/real.html")) {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      return res.end(fs.readFileSync(new URL("../real.html", import.meta.url)));
+    }
+    // mesmo formato da ponte do Vercel (/api/real?p=estado|config|ping)
+    if (url.pathname === "/api/real") url.pathname = "/" + (url.searchParams.get("p") || "estado");
     if (url.pathname === "/ping") return enviar(200, { ok: true, carteira: CARTEIRA.address, pin: !!ENV.PIN });
     ENV = lerEnv();
     if (!ENV.PIN) return enviar(403, { erro: "PIN ainda não configurado: rode robo-config no servidor" });
