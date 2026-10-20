@@ -732,7 +732,7 @@ http.createServer(async (req, res) => {
     // a própria página do painel do robô, servida direto pelo servidor
     if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/real.html")) {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
-      return res.end(fs.readFileSync(new URL("../real.html", import.meta.url)));
+      return res.end(fs.readFileSync(new URL("./painel.html", import.meta.url)));
     }
     // mesmo formato da ponte do Vercel (/api/real?p=estado|config|ping)
     if (url.pathname === "/api/real") url.pathname = "/" + (url.searchParams.get("p") || "estado");

@@ -306,7 +306,7 @@ svg text{fill:var(--muted);font:10px var(--mono)}
     </nav>
     <div class="foot">
       <button class="simtag modoBtn" id="modoBtn" title="Alternar entre simulador e dinheiro real">Modo simulador</button>
-      <a href="/real.html" style="font-size:13px;font-weight:600;text-decoration:none">Robô real →</a>
+      <a href="#" id="modoLnk" style="font-size:13px;font-weight:600;text-decoration:none">Operar em modo real →</a>
       <a href="/radar.html" class="muted" style="font-size:12px;text-decoration:none">Radar de moedas →</a>
     </div>
   </aside>
@@ -546,7 +546,6 @@ svg text{fill:var(--muted);font:10px var(--mono)}
     <a href="#config">Configurações <span class="faint">→</span></a>
     <a href="#guia">Guia <span class="faint">→</span></a>
     <a href="#" id="modoBtnM">Operar em modo real <span class="faint">→</span></a>
-    <a href="/real.html">Robô real (dinheiro de verdade) <span class="faint">→</span></a>
     <a href="/radar.html">Radar de moedas <span class="faint">→</span></a>
   </div>
 </div>
@@ -610,7 +609,11 @@ let dados = null, rotas = [], hist = {}, ultimaOk = 0, emExecucao = null, livroA
 // modo real (dinheiro de verdade pelo robô do servidor) ou simulador
 let REAL = ler("mesa_real", false), PIN_REAL = "";
 try{ PIN_REAL = localStorage.getItem("roboPin") || ""; }catch(e){}
-if(REAL && !PIN_REAL) REAL = false;
+if(REAL && !PIN_REAL){
+  const p = prompt("Modo real: digite o PIN do robô (o que você criou no servidor):");
+  if(p && p.trim()){ PIN_REAL = p.trim(); try{ localStorage.setItem("roboPin", PIN_REAL); }catch(e){} }
+  else { REAL = false; try{ localStorage.setItem("mesa_real", "false"); }catch(e){} }
+}
 
 
 // ============================================================ formatos
@@ -1352,12 +1355,12 @@ function trocarModo(paraReal){
   gravar("mesa_real", !!paraReal); location.reload();
 }
 document.addEventListener("click", e => {
-  if(e.target.closest("#modoBtn, #modoBtnM")){ e.preventDefault(); trocarModo(!REAL); }
+  if(e.target.closest("#modoBtn, #modoBtnM, #modoLnk")){ e.preventDefault(); trocarModo(!REAL); }
   if(e.target.closest("[data-modo-sim]")) trocarModo(false);
 });
 if(REAL){
   document.documentElement.classList.add("real");
-  $("#modoBtn").textContent = "● Modo real"; $("#modoBtnM").firstChild.textContent = "Voltar ao simulador ";
+  $("#modoBtn").textContent = "● Modo real"; $("#modoBtnM").firstChild.textContent = "Voltar ao simulador "; $("#modoLnk").textContent = "← Voltar ao simulador";
   $("#saud").parentElement.querySelector(".sub").textContent = "USDT/BRL entre corretoras · preços reais ao vivo · DINHEIRO REAL";
 }
 let servidor = null, roboLigado = null, roboAlterando = false;
@@ -1378,6 +1381,18 @@ async function mudarInterruptor(){
   roboAlterando = false; renderServidor();
 }
 document.addEventListener("click", e => { if(e.target.closest("#srvTg")) mudarInterruptor(); });
+// salvar regras do robô real (valor máximo e lucro mínimo)
+let editandoRegras = false;
+document.addEventListener("focusin", e => { if(e.target.closest("#rMax, #rMin")) editandoRegras = true; });
+document.addEventListener("click", async e => {
+  if(!e.target.closest("#rSalvar")) return;
+  const max = +$("#rMax").value, minimo = +$("#rMin").value;
+  try{
+    const r = await fetch("/api/real?p=config", {method:"POST", headers: hdrReal(), body: JSON.stringify({max, minimo})});
+    const d = await r.json(); if(!r.ok) throw new Error(d.erro || "erro");
+    editandoRegras = false; toast(`Regras salvas: até ${R(max)} por operação, lucro mínimo ${nf(minimo, 2)}%.`); lerServidor();
+  }catch(err){ toast("Não consegui salvar: " + err.message, "bad"); }
+});
 async function lerServidor(){
   try{
     const r = await fetch(SRV_URL + (SRV_URL.includes("?") ? "&" : "?") + "t=" + Date.now(), {cache:"no-store", headers: REAL ? hdrReal() : {}});
@@ -1400,6 +1415,7 @@ async function lerServidor(){
 }
 function renderServidor(){
   if(!servidor) return;
+  if(REAL && editandoRegras) return; // não apaga o que você está digitando
   const c = servidor.config, p = servidor.pendente;
   const verif = servidor.verificado || servidor.atualizado || 0, min = Math.round((Date.now() - verif)/60000);
   const vivo = min <= 15, lig = roboLigado !== false;
@@ -1419,7 +1435,7 @@ function renderServidor(){
       <div><span class="eyebrow">Operações hoje</span><b>${hh.length}</b></div>
       <div><span class="eyebrow">Agora</span><b style="font-size:13px;font-family:var(--sans)">${p ? (REAL && p.rotulo ? esc(p.segurandoMsg || p.rotulo) : p.segurandoDesde ? `segurando USDT na ${nome(p.b)} até vender sem prejuízo` : `USDT a caminho da ${nome(p.b)}`) : lig ? "procurando oportunidade" : REAL ? "automático desligado · Executar manual liberado" : "parado (desligado)"}</b></div>
     </div>
-    <div class="faint" style="font-size:12px;margin-top:10px">${REAL ? `Corretoras conectadas: ${(servidor.conectadas || []).map(nome).join(" e ")}. Para mudar mínimo e valor máximo, use a página <a href="/real.html">Robô real</a>. Gás na carteira: ${nf(servidor.pol || 0, 2)} POL.` : "A página atualiza estes números sozinha a cada minuto. Para mudar mínimo, valor ou saldos do robô 24h, é só me pedir no chat."}</div>`;
+    <div class="faint" style="font-size:12px;margin-top:10px">${REAL ? `<div class="row" style="margin-bottom:8px"><label class="f">Valor máximo por operação (R$)<input id="rMax" type="number" min="20" step="10" value="${c.max}" style="width:150px"></label><label class="f">Lucro mínimo (%)<input id="rMin" type="number" min="0" step="0.01" value="${c.minimo}" style="width:120px"></label><button id="rSalvar" style="align-self:flex-end">Salvar regras</button></div>Corretoras conectadas: ${(servidor.conectadas || []).map(nome).join(" e ")}. Gás na carteira do robô: ${nf(servidor.pol || 0, 2)} POL.` : "A página atualiza estes números sozinha a cada minuto. Para mudar mínimo, valor ou saldos do robô 24h, é só me pedir no chat."}</div>`;
 }
 
 // ---------- execução manual no servidor (um clique)
