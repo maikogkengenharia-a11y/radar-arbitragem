@@ -79,6 +79,12 @@ function migrar(e) {
     e.taxasVersao = 5;
     e.log = [{ t: Date.now(), txt: "Simulação reiniciada: R$ 5.000 na Binance, uma operação por vez, robô automático DESLIGADO (modo manual: clique em Executar nas oportunidades). Lucro mínimo 0,02%.", tipo: "good" }];
   }
+  if ((e.taxasVersao || 0) < 6) {
+    // 20/10: simulador igual ao real — sem Pix grátis entre corretoras; a volta para a Binance tem custo de verdade
+    e.credito = Math.max(0, (e.hist || []).reduce((t, x) => t + (x.lucro || 0), 0));
+    e.taxasVersao = 6;
+    log(e, "Simulador igual ao real: o dinheiro só sai da corretora onde está (sem Pix grátis). A volta para a Binance usa o lucro da ida para pagar o custo, e o ciclo nunca fica negativo.", "acc");
+  }
 }
 const MAX_SIMULTANEAS = 1; // uma operação por vez (pedido do usuário em 20/10)
 // várias operações ao mesmo tempo; "pendente" continua existindo (a mais antiga) para o painel
@@ -151,14 +157,10 @@ function puxarReais(e, para, quanto) {
 function comprar(e, r, manual) { const p = abrir(e, r, manual); logCompra(e, r, manual); return p; }
 function abrir(e, r, manual) {
   const agora = Date.now();
-  if (e.saldos[r.a].brl < r.valor) {
-    const mv = puxarReais(e, r.a, r.valor - e.saldos[r.a].brl);
-    if (mv > 0) log(e, `Pix simulado: ${R(mv)} levados para a ${nome(r.a)}`, "acc");
-  }
-  e.saldos[r.a].brl -= r.valor;
+  e.saldos[r.a].brl -= r.valor; // igual ao real: só usa o dinheiro que já está nesta corretora
   e.saldos[r.b].usdt += r.chega;
   const p = { id: agora + Math.floor(Math.random() * 1000), a: r.a, b: r.b, valor: r.valor, usdt: r.usdt, chega: r.chega, medioCompra: r.medioCompra, taxaA: r.taxaA, saque: r.saque,
-    previsto: r.lucro, previstoPct: r.pct, manual: !!manual, inicio: agora, chegaEm: agora + (e.config.transferenciaSeg ?? 120) * 1000 };
+    previsto: r.lucro, previstoPct: r.pct, manual: !!manual, inicio: agora, chegaEm: agora + (e.config.transferenciaSeg ?? 120) * 1000, credito: r.credito || 0, retorno: !!r.retorno };
   e.pendentes.push(p); e.pendente = e.pendentes[0];
   return p;
 }
@@ -180,7 +182,7 @@ function tentarVender(e, q, p) {
   if (agora < p.chegaEm) return false;
   const aqui = venderEm(e, q, p.b, p.chega);
   const lucro = aqui ? aqui.final - p.valor : -Infinity;
-  if (!aqui || lucro < 0) {
+  if (!aqui || lucro < -(p.credito || 0)) {
     // procura outro destino para o USDT preso
     const taxaSaque = e.config.saque[p.b] ?? 1, chega2 = p.chega - taxaSaque;
     let alt = null;
@@ -213,11 +215,37 @@ function tentarVender(e, q, p) {
   log(e, `${p.manual ? "Operação manual concluída" : "Robô concluiu"}: ${nome(p.a)} → ${p.via ? p.via.map(nome).join(" → ") + " → " : ""}${nome(p.b)} · ${RS(lucro)} (${pct(lucro / p.valor * 100)})`, "good");
   e.ultimaOp = agora;
   e.pendentes = e.pendentes.filter(x => x !== p);
+  creditar(e, p, lucro);
   return true;
 }
-function melhorRota(e, q, valor) {
+// "crédito" = lucro das idas que ainda pode pagar a volta para a casa (Binance)
+const CASA = "binance";
+function creditar(e, p, lucro) {
+  if (p.a === CASA) e.credito = (e.credito || 0) + Math.max(0, lucro);
+  else e.credito = Math.max(0, (e.credito || 0) + lucro);
+}
+// rotas possíveis agora: só saem de onde há reais; a volta para a Binance vale quando ida + volta não ficam negativas
+function rotasPossiveis(e, q) {
+  const out = [], credito = e.credito || 0;
+  const ativas = [...new Set([...e.config.corretoras, ...Object.keys(e.saldos).filter(c => e.saldos[c].brl >= 50)])].filter(c => q[c]);
+  for (const a of ativas) {
+    const saldo = e.saldos[a].brl;
+    if (saldo < 50) continue;
+    const valor = Math.floor((a === CASA ? Math.min(e.config.max, saldo) : saldo) * 100) / 100;
+    for (const b of ativas) {
+      if (a === b) continue;
+      const r = calcRota(e.config, a, b, valor, q[a], q[b]);
+      if (r.faltou) continue;
+      if (r.lucro > 0 && r.pct >= e.config.minimo) out.push(r);
+      else if (a !== CASA && b === CASA && r.lucro + credito >= 0) out.push({ ...r, retorno: true, credito });
+    }
+  }
+  return out.sort((x, y) => (y.retorno ? 1 : 0) - (x.retorno ? 1 : 0) || y.pct - x.pct);
+}
+function melhorRota(e, q) {
   let melhor = null;
   const ativas = e.config.corretoras.filter(c => q[c]);
+  const valor = e.config.max;
   for (const a of ativas) for (const b of ativas) {
     if (a === b) continue;
     const r = calcRota(e.config, a, b, valor, q[a], q[b]);
@@ -230,7 +258,7 @@ function melhorRota(e, q, valor) {
 export async function tick() {
   const { e: e0 } = await lerEstado();
   normalizar(e0);
-  const lista = [...new Set([...e0.config.corretoras, ...e0.pendentes.map(p => p.b)])];
+  const lista = [...new Set([...e0.config.corretoras, ...e0.pendentes.map(p => p.b), ...Object.keys(e0.saldos).filter(c => e0.saldos[c].brl >= 50)])];
   const q = await precos(lista);
   return alterar(e => {
     const agora = Date.now();
@@ -245,15 +273,15 @@ export async function tick() {
       if (!e.pendentes.length && agora - (e.avisoSemSaldo || 0) > 3600000) { e.avisoSemSaldo = agora; log(e, "Sem reais para operar.", "warn"); }
       return { ok: true, acao: e.pendentes.length ? "todo o saldo em operação" : "sem saldo", mudou };
     }
-    const valor = Math.floor(Math.min(e.config.max, total) * 100) / 100;
-    const r = melhorRota(e, q, valor);
-    if (!r) return { ok: true, acao: "sem rota" };
-    if (r.pct < e.config.minimo || r.lucro <= 0) {
-      if (agora - (e.ultimoProcurando || 0) > 10 * 60000) { e.ultimoProcurando = agora; log(e, `Procurando… melhor rota agora ${nome(r.a)} → ${nome(r.b)} ${pct(r.pct)} (mínimo ${nf(e.config.minimo, 2)}%)`, "faint"); }
-      return { ok: true, acao: "procurando", melhor: { a: r.a, b: r.b, pct: r.pct } };
+    const r = rotasPossiveis(e, q)[0];
+    if (!r) {
+      const m = melhorRota(e, q);
+      if (m && agora - (e.ultimoProcurando || 0) > 10 * 60000) { e.ultimoProcurando = agora; log(e, `Procurando… melhor rota agora ${nome(m.a)} → ${nome(m.b)} ${pct(m.pct)} (mínimo ${nf(e.config.minimo, 2)}%)`, "faint"); }
+      return { ok: true, acao: "procurando" };
     }
     comprar(e, r, false);
-    return { ok: true, acao: "comprou", rota: { a: r.a, b: r.b, valor, lucro: r.lucro } };
+    if (r.retorno) log(e, `Trazendo o dinheiro de volta para a Binance: a volta custa ${RS(r.lucro)}, coberto pelo lucro guardado das idas (${R(r.credito)}).`, "acc");
+    return { ok: true, acao: "comprou", rota: { a: r.a, b: r.b, valor: r.valor, lucro: r.lucro } };
   });
 }
 
@@ -277,6 +305,7 @@ export async function venderAgora(id) {
     log(e, `Venda forçada por você: ${nome(p.a)} → ${nome(p.b)} · ${RS(lucro)} (${pct(lucro / p.valor * 100)}). Dinheiro de volta em reais na ${nome(p.b)}.`, lucro >= 0 ? "good" : "warn");
     e.ultimaOp = agora;
     e.pendentes = e.pendentes.filter(y => y !== p);
+    creditar(e, p, lucro);
     return { ok: true, lucro, final: x.final, b: p.b };
   });
 }
@@ -290,11 +319,15 @@ export async function executarManual(a, b, valorPedido) {
     const total = totalBrl(e);
     if (e.pendentes.length >= MAX_SIMULTANEAS) return { ok: false, semGravar: true, erro: `já há ${MAX_SIMULTANEAS} operações em andamento. Espere uma terminar.` };
     if (total < 50 && e.pendentes.length) return { ok: false, semGravar: true, erro: "todo o saldo está em operações em andamento. Espere uma terminar." };
-    const valor = Math.floor(Math.min(+valorPedido || e.config.max, total) * 100) / 100;
-    if (valor < 50) return { ok: false, semGravar: true, erro: `sem reais suficientes (total ${R(total)})` };
-    const r = calcRota(e.config, a, b, valor, q[a], q[b]);
+    const saldoA = e.saldos[a].brl;
+    const valor = Math.floor(Math.min(+valorPedido || e.config.max, saldoA) * 100) / 100;
+    if (valor < 50) return { ok: false, semGravar: true, erro: `sem reais na ${nome(a)} (${R(saldoA)}). Igual ao real: o dinheiro só sai de onde ele está.` };
+    let r = calcRota(e.config, a, b, valor, q[a], q[b]);
     if (r.faltou) return { ok: false, semGravar: true, erro: "não há ofertas suficientes no livro para esse valor" };
-    if (r.lucro <= 0 || r.pct < e.config.minimo) return { ok: false, semGravar: true, erro: `essa rota agora daria ${RS(r.lucro)} (${pct(r.pct)}), abaixo do mínimo de ${nf(e.config.minimo, 2)}%. Para proteger o saldo, não executei.` };
+    const credito = e.credito || 0;
+    const volta = a !== CASA && b === CASA && r.lucro + credito >= 0;
+    if (!volta && (r.lucro <= 0 || r.pct < e.config.minimo)) return { ok: false, semGravar: true, erro: `essa rota agora daria ${RS(r.lucro)} (${pct(r.pct)}), abaixo do mínimo de ${nf(e.config.minimo, 2)}%. Para proteger o saldo, não executei.` };
+    if (volta && !(r.lucro > 0 && r.pct >= e.config.minimo)) r = { ...r, retorno: true, credito };
     const p = comprar(e, r, true);
     return { ok: true, rota: { id: p.id, a, b, valor, lucro: r.lucro, pct: r.pct, chegaEm: p.chegaEm } };
   });

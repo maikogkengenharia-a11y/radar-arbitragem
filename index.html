@@ -672,6 +672,9 @@ function motivoInviavel(r){
     if(!REAL && total < 50 && (servidor.pendentes || []).length) return "todo o saldo está em operação; espere uma terminar";
     if(REAL && sim.saldos[r.a].brl < 20) return `sem saldo em reais na ${nome(r.a)}`;
     if(!REAL && total < 50) return "sem reais no simulador";
+    if(!REAL && sim.saldos[r.a].brl < 50) return `sem saldo em reais na ${nome(r.a)}`;
+    // volta para a Binance: vale quando ida + volta não ficam negativas (o lucro guardado paga a volta)
+    if(!REAL && r.a !== "binance" && r.b === "binance" && r.lucro + (servidor.credito || 0) >= 0) return "";
     if(r.lucro <= 0 || r.pct < min) return r.lucro <= 0 ? "daria prejuízo agora" : `abaixo do mínimo de ${nf(min, 2)}%`;
     return "";
   }
