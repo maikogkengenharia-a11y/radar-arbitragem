@@ -160,6 +160,14 @@ label.f{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--mu
 .real .realbar{position:sticky;top:8px;z-index:30;backdrop-filter:blur(6px);display:flex;align-items:center;gap:10px;justify-content:space-between;background:var(--bad-soft);border:1px solid var(--bad);color:var(--bad);border-radius:10px;padding:8px 12px;margin:0 0 14px;font:600 12px var(--mono);letter-spacing:.06em;text-transform:uppercase}
 .realbar button{font:600 11px var(--mono);padding:5px 10px;border-color:var(--bad);color:var(--bad);background:transparent}
 .st.nc{color:var(--faint);border-color:var(--rule2)}
+.rk{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin:14px 0}
+.rk .card{padding:14px}
+.rkl{display:grid;grid-template-columns:44px 1fr auto;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--rule)}
+.rkl:first-of-type{border-top:0}
+.nota{font:600 15px var(--mono);border-radius:8px;padding:4px 0;text-align:center}
+.nota.a{background:var(--good-soft);color:var(--good)} .nota.m{background:var(--warn-soft);color:var(--warn)} .nota.b{background:var(--bad-soft);color:var(--bad)}
+.barra{height:4px;border-radius:4px;background:var(--rule2);overflow:hidden;margin-top:4px} .barra i{display:block;height:100%;background:var(--accent)}
+.perfis{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px} .perfis button.sel{border-color:var(--accent);color:var(--accent)}
 .servidor #btnRebal,.servidor .cx .mais,.servidor .strip .ed{display:none!important}
 .srv{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .srv>div{background:var(--bg2);border:1px solid var(--rule);border-radius:12px;padding:12px}
@@ -350,6 +358,7 @@ svg text{fill:var(--muted);font:10px var(--mono)}
         <label class="f">Mostrar<select id="opFiltro"><option value="todas">todas as rotas</option><option value="viaveis">só as viáveis</option></select></label>
         <div class="banner info" style="flex:1;min-width:240px">Lucro já descontando taxa de compra, taxa de saque do USDT e taxa de venda, usando as ofertas reais do livro de cada corretora.</div>
       </div>
+      <div class="rk" id="ranking"></div>
       <div class="ops" id="ops"></div>
     </section>
 
@@ -1411,6 +1420,49 @@ document.addEventListener("click", async e => {
     lerServidor();
   }catch(err){ toast("Não consegui sacar: " + err.message, "bad"); b.disabled = false; b.textContent = "Sacar tudo para a Picnic"; }
 });
+// ---------- perfis prontos: ajustam lucro mínimo e valor por operação de uma vez
+const perfilReal = () => { try{ return localStorage.getItem("perfilReal") || ""; }catch(e){ return ""; } };
+const PERFIS = {
+  conservador: { nome: "🛡️ Conservador", minimo: 0.15, fatia: 0.4, desc: "Só entra com lucro de 0,15% ou mais e usa até 40% do saldo por operação. Opera menos, com mais folga se o preço andar." },
+  moderado: { nome: "⚖️ Moderado", minimo: 0.08, fatia: 0.7, desc: "Lucro mínimo de 0,08% e até 70% do saldo por operação." },
+  agressivo: { nome: "🚀 Agressivo", minimo: 0.02, fatia: 1, desc: "Entra a partir de 0,02% e usa todo o saldo. Opera mais vezes, mas qualquer mexida no preço come o lucro." },
+};
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-perfil]"); if(!b || !servidor) return;
+  const k = b.dataset.perfil, p = PERFIS[k], mid = midAtual();
+  const capital = Object.values(sim.saldos).reduce((t, x) => t + x.brl + x.usdt*mid, 0);
+  const max = Math.max(50, Math.floor(capital * p.fatia / 50) * 50 || 200);
+  if(!confirm(`${p.nome}\n\n${p.desc}\n\nFica: lucro mínimo ${nf(p.minimo, 2)}% e até ${R(max)} por operação.`)) return;
+  try{
+    const r = REAL ? await fetch("/api/real?p=config", {method:"POST", headers: hdrReal(), body: JSON.stringify({max, minimo: p.minimo})})
+      : await fetch("/api/regras", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({max, minimo: p.minimo, perfil: k})});
+    const d = await r.json(); if(!r.ok || d.ok === false) throw new Error(d.erro || "erro");
+    if(REAL){ try{ localStorage.setItem("perfilReal", k); }catch(err){} }
+    toast(`Perfil ${p.nome} aplicado: mínimo ${nf(p.minimo, 2)}%, até ${R(max)} por operação.`); editandoRegras = false; lerServidor();
+  }catch(err){ toast("Não consegui aplicar o perfil: " + err.message, "bad"); }
+});
+
+// ---------- ranking das rotas (nota 0–100), feito pelo robô do servidor que vigia 24h
+let rank = null;
+async function lerRanking(){
+  try{ const r = await fetch("/api/real?p=ranking", {cache:"no-store"}); if(r.ok){ rank = await r.json(); renderRanking(); } }catch(e){}
+}
+function renderRanking(){
+  const el = $("#ranking"); if(!el || !rank || !rank.rotas) return;
+  const cls = n => n >= 60 ? "a" : n >= 40 ? "m" : "b";
+  const nmx = c => nome(c === "polygon" ? "polygon" : c);
+  const dica = r => `frequência ${r.partes.frequencia}/35 · lucro médio ${r.partes.lucro}/30 · quão perto chegou ${r.partes.perto}/15 · facilidade ${r.partes.facilidade}/20`;
+  el.innerHTML = `<div class="card"><div class="row" style="justify-content:space-between"><div class="eyebrow">Ranking das rotas · nota 0–100</div><span class="faint" style="font-size:11px">${rank.horas} h de dados do robô 24h</span></div>
+    ${rank.rotas.slice(0, 7).map(r => `<div class="rkl" title="${esc(dica(r))}"><span class="nota ${cls(r.nota)}">${r.nota}</span><div><b>${nmx(r.a)} → ${nmx(r.b)}</b>${r.conectada ? ` <span class="st ok" style="font-size:10px">conectada</span>` : ""}
+      <div class="faint" style="font-size:11.5px">${r.vezes}× com lucro (${nf(r.porDia, 1)}/dia) · média ${pct(r.medio, 3)} · melhor ${pct(r.melhor, 3)}</div><div class="barra"><i style="width:${r.nota}%"></i></div></div><span></span></div>`).join("")}
+    <div class="faint" style="font-size:11.5px;margin-top:8px">Passe o mouse numa linha para ver as partes da nota: frequência (até 35) + lucro médio (até 30) + quão perto chegou do lucro (até 15) + facilidade das corretoras (até 20).</div></div>
+    <div class="card"><div class="eyebrow">Vale abrir conta?</div>
+    ${rank.corretoras.map(c => `<div class="rkl"><span class="nota ${c.conectada ? "a" : cls(c.nota)}">${c.nota}</span><div><b>${nmx(c.c)}</b><div class="faint" style="font-size:11.5px">${c.conectada ? "já conectada ao robô real" : c.rota ? "melhor rota: " + c.rota.split(">").map(nmx).join(" → ") : "sem dados ainda"}</div></div>
+      <span class="st ${c.conectada ? "ok" : c.nota >= 60 ? "ok" : c.nota >= 40 ? "sal" : "no"}">${c.veredito}</span></div>`).join("")}
+    <div class="faint" style="font-size:11.5px;margin-top:8px">60 ou mais: vale abrir conta e conectar. 40 a 59: talvez. Abaixo de 40: ainda não compensa.</div></div>`;
+}
+lerRanking(); setInterval(lerRanking, 60000);
+
 // salvar regras do robô real (valor máximo e lucro mínimo)
 let editandoRegras = false;
 document.addEventListener("focusin", e => { if(e.target.closest("#rMax, #rMin")) editandoRegras = true; });
@@ -1418,7 +1470,8 @@ document.addEventListener("click", async e => {
   if(!e.target.closest("#rSalvar")) return;
   const max = +$("#rMax").value, minimo = +$("#rMin").value;
   try{
-    const r = await fetch("/api/real?p=config", {method:"POST", headers: hdrReal(), body: JSON.stringify({max, minimo})});
+    const r = REAL ? await fetch("/api/real?p=config", {method:"POST", headers: hdrReal(), body: JSON.stringify({max, minimo})})
+      : await fetch("/api/regras", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({max, minimo})});
     const d = await r.json(); if(!r.ok) throw new Error(d.erro || "erro");
     editandoRegras = false; toast(`Regras salvas: até ${R(max)} por operação, lucro mínimo ${nf(minimo, 2)}%.`); lerServidor();
   }catch(err){ toast("Não consegui salvar: " + err.message, "bad"); }
@@ -1445,7 +1498,7 @@ async function lerServidor(){
 }
 function renderServidor(){
   if(!servidor) return;
-  if(REAL && editandoRegras) return; // não apaga o que você está digitando
+  if(editandoRegras) return; // não apaga o que você está digitando
   const c = servidor.config, p = servidor.pendente;
   const verif = servidor.verificado || servidor.atualizado || 0, min = Math.round((Date.now() - verif)/60000);
   const vivo = min <= 15, lig = roboLigado !== false;
@@ -1465,7 +1518,9 @@ function renderServidor(){
       <div><span class="eyebrow">Operações hoje</span><b>${hh.length}</b></div>
       <div><span class="eyebrow">Agora</span>${p && (p.segurandoDesde || REAL) && !p.forcar ? `<button class="go sm sell" id="bVenderJa" style="float:right;margin-top:-4px">Vender agora mesmo assim</button>` : ""}<b style="font-size:13px;font-family:var(--sans)">${!REAL && (servidor.pendentes || []).length > 1 ? `${servidor.pendentes.length} operações em andamento` + (servidor.pendentes.some(x => x.segurandoDesde) ? " · alguma segurando USDT" : "") : p ? (REAL && p.rotulo ? esc(p.segurandoMsg || p.rotulo) : p.segurandoDesde ? `segurando USDT na ${nome(p.b)} até vender sem prejuízo` : `USDT a caminho da ${nome(p.b)}`) : lig ? "procurando oportunidade" : REAL ? "automático desligado · Executar manual liberado" : "parado (desligado)"}</b></div>
     </div>
-    <div class="faint" style="font-size:12px;margin-top:10px">${REAL ? `<div class="row" style="margin-bottom:8px"><label class="f">Valor máximo por operação (R$)<input id="rMax" type="number" min="20" step="10" value="${c.max}" style="width:150px"></label><label class="f">Lucro mínimo (%)<input id="rMin" type="number" min="0" step="0.01" value="${c.minimo}" style="width:120px"></label><button id="rSalvar" style="align-self:flex-end">Salvar regras</button></div><div class="row" style="margin-bottom:8px;align-items:center"><span>BRLA na carteira do robô: <b class="num">${R(sim.saldos.polygon ? sim.saldos.polygon.brl : 0)}</b></span><button id="rSacar" ${(sim.saldos.polygon && sim.saldos.polygon.brl >= 1 && !servidor.pendente) ? "" : "disabled"}>Sacar tudo para a Picnic</button><span class="faint">automático: depois de cada ida, o robô traz o dinheiro de volta para a Binance assim que ida + volta derem zero ou lucro${servidor.credito ? ` (lucro guardado para pagar a volta: ${R(servidor.credito)})` : ""}. Use o botão só se quiser tirar para a Picnic.</span></div>Corretoras conectadas: ${(servidor.conectadas || []).map(nome).join(" e ")}. Gás na carteira do robô: ${nf(servidor.pol || 0, 2)} POL.` : "A página atualiza estes números sozinha a cada minuto. Para mudar mínimo, valor ou saldos do robô 24h, é só me pedir no chat."}</div>`;
+    <div class="faint" style="font-size:12px;margin-top:10px"><div class="eyebrow" style="margin-top:4px">Perfil do robô</div><div class="perfis">${Object.entries(PERFIS).map(([k, p]) => `<button data-perfil="${k}" class="${(REAL ? perfilReal() : c.perfil) === k ? "sel" : ""}" title="${esc(p.desc)}">${p.nome}</button>`).join("")}</div>
+    ${!REAL ? `<div class="row" style="margin-bottom:8px"><label class="f">Valor máximo por operação (R$)<input id="rMax" type="number" min="50" step="100" value="${c.max}" style="width:150px"></label><label class="f">Lucro mínimo (%)<input id="rMin" type="number" min="0" step="0.01" value="${c.minimo}" style="width:120px"></label><button id="rSalvar" style="align-self:flex-end">Salvar regras</button></div>` : ""}
+    ${REAL ? `<div class="row" style="margin-bottom:8px"><label class="f">Valor máximo por operação (R$)<input id="rMax" type="number" min="20" step="10" value="${c.max}" style="width:150px"></label><label class="f">Lucro mínimo (%)<input id="rMin" type="number" min="0" step="0.01" value="${c.minimo}" style="width:120px"></label><button id="rSalvar" style="align-self:flex-end">Salvar regras</button></div><div class="row" style="margin-bottom:8px;align-items:center"><span>BRLA na carteira do robô: <b class="num">${R(sim.saldos.polygon ? sim.saldos.polygon.brl : 0)}</b></span><button id="rSacar" ${(sim.saldos.polygon && sim.saldos.polygon.brl >= 1 && !servidor.pendente) ? "" : "disabled"}>Sacar tudo para a Picnic</button><span class="faint">automático: depois de cada ida, o robô traz o dinheiro de volta para a Binance assim que ida + volta derem zero ou lucro${servidor.credito ? ` (lucro guardado para pagar a volta: ${R(servidor.credito)})` : ""}. Use o botão só se quiser tirar para a Picnic.</span></div>Corretoras conectadas: ${(servidor.conectadas || []).map(nome).join(" e ")}. Gás na carteira do robô: ${nf(servidor.pol || 0, 2)} POL.` : "A página atualiza estes números sozinha a cada minuto. Para mudar mínimo, valor ou saldos do robô 24h, é só me pedir no chat."}</div>`;
 }
 
 // ---------- execução manual no servidor (um clique)

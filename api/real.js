@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   const url = new URL(req.url, "http://x");
   const p = url.searchParams.get("p") || "estado";
-  if (!["estado", "config", "ping", "painel", "executar", "sacar", "vender"].includes(p)) return res.status(400).json({ erro: "caminho inválido" });
+  if (!["estado", "config", "ping", "painel", "executar", "sacar", "vender", "ranking"].includes(p)) return res.status(400).json({ erro: "caminho inválido" });
   try {
     const r = await fetch(`${ROBO}/${p}`, {
       method: req.method === "POST" ? "POST" : "GET",

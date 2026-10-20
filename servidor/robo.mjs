@@ -624,8 +624,11 @@ async function rodarRadar() {
   for (const r of R.rotas) {
     const k = `${r.a}>${r.b}`;
     const st = E.radarStats[k] || (E.radarStats[k] = { a: r.a, b: r.b, vezes: 0, melhor: -99, ultima: 0, soma: 0 });
+    st.amostras = (st.amostras || 0) + 1;
     if (r.pct > st.melhor) st.melhor = r.pct;
-    if (r.pct >= E.config.minimo && r.lucro > 0 && agora() - st.ultima > 60e3) { st.vezes++; st.ultima = agora(); st.soma = r2(st.soma + r.lucro); }
+    if (r.pct >= E.config.minimo && r.lucro > 0 && agora() - st.ultima > 60e3) {
+      st.vezes++; st.ultima = agora(); st.soma = r2(st.soma + r.lucro); st.somaPct = +((st.somaPct || 0) + r.pct).toFixed(4);
+    }
   }
 }
 
@@ -704,6 +707,36 @@ async function loop() {
 }
 
 // ---------------------------------------------------------------- painel (HTTP, protegido por PIN)
+// ---------------------------------------------------------------- ranking das rotas (nota 0–100)
+// nota = frequência (até 35) + lucro médio (até 30) + quão perto chegou do lucro (até 15) + facilidade das corretoras (até 20)
+const FACIL = { binance: 10, polygon: 10, bitget: 7, bybit: 7, foxbit: 4, mercadobitcoin: 4, bitso: 4 };
+function ranking() {
+  const desde = E.radarDesde || agora();
+  const dias = Math.max((agora() - desde) / 86400e3, 1 / 24);
+  const conectadas = ENV.BINANCE_KEY ? ["binance", "polygon"] : ["polygon"];
+  const rotas = Object.values(E.radarStats).map(st => {
+    const porDia = st.vezes / dias;
+    const medio = st.vezes ? (st.somaPct != null ? st.somaPct : (st.soma / (E.config.max || 200)) * 100) / st.vezes : 0;
+    const p = {
+      frequencia: Math.min(35, (35 * porDia) / 20),
+      lucro: Math.min(30, (30 * Math.max(0, medio)) / 0.3),
+      perto: Math.min(15, Math.max(0, (15 * (st.melhor + 0.2)) / 0.5)),
+      facilidade: (FACIL[st.a] ?? 4) + (FACIL[st.b] ?? 4),
+    };
+    const nota = Math.round(p.frequencia + p.lucro + p.perto + p.facilidade);
+    return { a: st.a, b: st.b, nota, partes: Object.fromEntries(Object.entries(p).map(([k, v]) => [k, Math.round(v)])),
+      vezes: st.vezes, porDia: +porDia.toFixed(1), medio: +medio.toFixed(3), melhor: +st.melhor.toFixed(3),
+      conectada: conectadas.includes(st.a) && conectadas.includes(st.b) };
+  }).sort((x, y) => y.nota - x.nota);
+  const corretoras = Object.keys(NOME).filter(c => c !== "polygon").map(c => {
+    const melhor = rotas.find(r => r.a === c || r.b === c);
+    const nota = melhor ? melhor.nota : 0;
+    return { c, nota, rota: melhor ? `${melhor.a}>${melhor.b}` : null, conectada: conectadas.includes(c),
+      veredito: conectadas.includes(c) ? "já conectada" : nota >= 60 ? "vale abrir conta" : nota >= 40 ? "talvez" : "não compensa ainda" };
+  }).sort((x, y) => y.nota - x.nota);
+  return { desde, horas: +(dias * 24).toFixed(1), rotas: rotas.slice(0, 20), corretoras, conectadas, minimo: E.config.minimo };
+}
+
 // ---------------------------------------------------------------- formato do painel do simulador (modo real)
 const ROTA_DE = { A: ["binance", "polygon"], B: ["polygon", "binance"] };
 const TIPO_LOG = { lucro: "good", erro: "bad", aviso: "warn", op: "acc", sim: "faint", info: "" };
@@ -823,6 +856,7 @@ http.createServer(async (req, res) => {
     // mesmo formato da ponte do Vercel (/api/real?p=estado|config|ping)
     if (url.pathname === "/api/real") url.pathname = "/" + (url.searchParams.get("p") || "estado");
     if (url.pathname === "/ping") return enviar(200, { ok: true, carteira: CARTEIRA.address, pin: !!ENV.PIN });
+    if (url.pathname === "/ranking") return enviar(200, ranking()); // só estatística de mercado, sem saldo: não precisa de PIN
     ENV = lerEnv();
     if (!ENV.PIN) return enviar(403, { erro: "PIN ainda não configurado: rode robo-config no servidor" });
     if (!pinOk(req)) return enviar(401, { erro: agora() < bloqueadoAte ? "Muitas tentativas. Espere 10 minutos." : "PIN incorreto" });
