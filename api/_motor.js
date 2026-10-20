@@ -19,13 +19,13 @@ export async function lerEstado() {
   const r = await get(ARQ, { access: "private", useCache: false }).catch(() => null);
   if (r && r.stream) {
     const e = JSON.parse(await new Response(r.stream).text());
-    migrar(e);
+    migrar(e); normalizar(e);
     return { e, etag: r.blob?.etag || r.etag || null };
   }
   // primeira vez: começa do estado inicial guardado no GitHub
   const s = await fetch(SEMENTE, { signal: AbortSignal.timeout(10000) });
   const e = await s.json();
-  migrar(e);
+  migrar(e); normalizar(e);
   e.ligado = e.ligado !== false;
   return { e, etag: null };
 }
@@ -60,7 +60,14 @@ function migrar(e) {
     e.log.unshift({ t: Date.now(), txt: `Nova simulação: R$ 5.000 na Binance, lucro mínimo 0,02% já com todas as taxas, até R$ 5.000 por operação. Rodada anterior (R$ 1.000): ${h.length} operações, ${RS(soma)}; a operação que estava segurando USDT foi encerrada.`, tipo: "good" });
   }
 }
+const MAX_SIMULTANEAS = 3;
+// várias operações ao mesmo tempo; "pendente" continua existindo (a mais antiga) para o painel
+function normalizar(e) {
+  if (!Array.isArray(e.pendentes)) e.pendentes = e.pendente ? [e.pendente] : [];
+  e.pendente = e.pendentes[0] || null;
+}
 export async function salvarEstado(e, etag) {
+  normalizar(e);
   e.atualizado = Date.now();
   const opts = { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: "application/json", cacheControlMaxAge: 60 };
   if (etag) opts.ifMatch = etag;
@@ -121,7 +128,8 @@ function puxarReais(e, para, quanto) {
 }
 
 // ---------------------------------------------------------------- operações
-function comprar(e, r, manual) {
+function comprar(e, r, manual) { const p = abrir(e, r, manual); logCompra(e, r, manual); return p; }
+function abrir(e, r, manual) {
   const agora = Date.now();
   if (e.saldos[r.a].brl < r.valor) {
     const mv = puxarReais(e, r.a, r.valor - e.saldos[r.a].brl);
@@ -129,31 +137,62 @@ function comprar(e, r, manual) {
   }
   e.saldos[r.a].brl -= r.valor;
   e.saldos[r.b].usdt += r.chega;
-  e.pendente = { id: agora, a: r.a, b: r.b, valor: r.valor, usdt: r.usdt, chega: r.chega, medioCompra: r.medioCompra, taxaA: r.taxaA, saque: r.saque,
+  const p = { id: agora + Math.floor(Math.random() * 1000), a: r.a, b: r.b, valor: r.valor, usdt: r.usdt, chega: r.chega, medioCompra: r.medioCompra, taxaA: r.taxaA, saque: r.saque,
     previsto: r.lucro, previstoPct: r.pct, manual: !!manual, inicio: agora, chegaEm: agora + (e.config.transferenciaSeg ?? 120) * 1000 };
+  e.pendentes.push(p); e.pendente = e.pendentes[0];
+  return p;
+}
+function logCompra(e, r, manual) {
   log(e, `${manual ? "Operação manual" : "Robô"}: comprou ${nf(r.usdt)} USDT na ${nome(r.a)} a ${nf(r.medioCompra, 4)} com ${R(r.valor)} e enviou para a ${nome(r.b)} · previsto ${RS(r.lucro)} (${pct(r.pct)})`, "acc");
 }
-// tenta concluir a venda; nunca vende no prejuízo
-function tentarVender(e, q) {
-  const p = e.pendente, agora = Date.now();
-  if (!p || agora < p.chegaEm) return false;
-  if (!q[p.b]) return false;
-  const v = percorrer(q[p.b].bids, p.chega, false);
-  const fb = (e.config.taxas[p.b] ?? 0.1) / 100;
-  const final = v.rec * (1 - fb), lucro = final - p.valor;
-  if (v.faltou || lucro < 0) {
-    if (!p.segurandoDesde) { p.segurandoDesde = agora; log(e, `Preço na ${nome(p.b)} piorou: vender agora daria ${RS(lucro)}. Segurando o USDT até dar para vender sem prejuízo.`, "warn"); }
-    else if (agora - (p.ultimoAviso || 0) > 30 * 60000) { p.ultimoAviso = agora; log(e, `Ainda segurando ${nf(p.chega)} USDT na ${nome(p.b)} (vender agora daria ${RS(lucro)})`, "warn"); }
+// tenta concluir a venda; nunca vende no prejuízo.
+// Se vender onde o USDT está daria prejuízo, procura outra corretora onde dê lucro
+// (descontando mais um saque) e manda o USDT para lá.
+function venderEm(e, q, c, usdt) {
+  if (!q[c]) return null;
+  const v = percorrer(q[c].bids, usdt, false);
+  if (v.faltou) return null;
+  const fb = (e.config.taxas[c] ?? 0.1) / 100;
+  return { v, fb, final: v.rec * (1 - fb) };
+}
+function tentarVender(e, q, p) {
+  const agora = Date.now();
+  if (agora < p.chegaEm) return false;
+  const aqui = venderEm(e, q, p.b, p.chega);
+  const lucro = aqui ? aqui.final - p.valor : -Infinity;
+  if (!aqui || lucro < 0) {
+    // procura outro destino para o USDT preso
+    const taxaSaque = e.config.saque[p.b] ?? 1, chega2 = p.chega - taxaSaque;
+    let alt = null;
+    if (chega2 > 0) for (const c of e.config.corretoras) {
+      if (c === p.b) continue;
+      const x = venderEm(e, q, c, chega2);
+      if (!x) continue;
+      const l = x.final - p.valor;
+      if (l >= Math.max(0, p.valor * (e.config.minimo || 0) / 100 * 0.5) && (!alt || l > alt.l)) alt = { c, l };
+    }
+    if (alt) {
+      e.saldos[p.b].usdt -= p.chega; e.saldos[alt.c].usdt += chega2;
+      log(e, `Redirecionando: vender na ${nome(p.b)} daria ${aqui ? RS(lucro) : "prejuízo"}. Mandei os ${nf(chega2)} USDT para a ${nome(alt.c)}, onde a venda dá ${RS(alt.l)}.`, "acc");
+      p.saque += taxaSaque; p.via = [...(p.via || []), p.b]; p.b = alt.c; p.chega = chega2;
+      p.chegaEm = agora + (e.config.transferenciaSeg ?? 120) * 1000;
+      delete p.segurandoDesde; delete p.ultimoAviso;
+      return true;
+    }
+    if (!p.segurandoDesde) { p.segurandoDesde = agora; log(e, `Preço na ${nome(p.b)} piorou: vender agora daria ${aqui ? RS(lucro) : "—"}. Segurando o USDT até dar para vender sem prejuízo (ou achar outra corretora onde dê).`, "warn"); }
+    else if (agora - (p.ultimoAviso || 0) > 30 * 60000) { p.ultimoAviso = agora; log(e, `Ainda segurando ${nf(p.chega)} USDT na ${nome(p.b)} (vender agora daria ${aqui ? RS(lucro) : "—"})`, "warn"); }
     return true;
   }
+  const { v, fb, final } = aqui;
   e.saldos[p.b].usdt -= p.chega; e.saldos[p.b].brl += final;
   e.hist = e.hist || [];
   e.hist.unshift({ id: p.id, t: agora, a: p.a, b: p.b, valor: p.valor, usdt: p.chega, compra: p.medioCompra, venda: v.medio,
     taxas: (p.taxaA + p.saque) * p.medioCompra + v.rec * fb, lucro, pct: lucro / p.valor * 100, previsto: p.previsto,
-    auto: !p.manual, final, modo: "transferir", servidor: true, duracao: agora - p.inicio });
+    auto: !p.manual, final, modo: "transferir", servidor: true, duracao: agora - p.inicio, via: p.via || null });
   e.hist = e.hist.slice(0, 2000);
-  log(e, `${p.manual ? "Operação manual concluída" : "Robô concluiu"}: ${nome(p.a)} → ${nome(p.b)} · ${RS(lucro)} (${pct(lucro / p.valor * 100)})`, "good");
-  e.ultimaOp = agora; e.pendente = null;
+  log(e, `${p.manual ? "Operação manual concluída" : "Robô concluiu"}: ${nome(p.a)} → ${p.via ? p.via.map(nome).join(" → ") + " → " : ""}${nome(p.b)} · ${RS(lucro)} (${pct(lucro / p.valor * 100)})`, "good");
+  e.ultimaOp = agora;
+  e.pendentes = e.pendentes.filter(x => x !== p);
   return true;
 }
 function melhorRota(e, q, valor) {
@@ -170,19 +209,22 @@ function melhorRota(e, q, valor) {
 // uma checagem do robô
 export async function tick() {
   const { e: e0 } = await lerEstado();
-  const lista = [...new Set([...e0.config.corretoras, ...(e0.pendente ? [e0.pendente.b] : [])])];
+  normalizar(e0);
+  const lista = [...new Set([...e0.config.corretoras, ...e0.pendentes.map(p => p.b)])];
   const q = await precos(lista);
   return alterar(e => {
     const agora = Date.now();
     e.verificado = agora;
-    if (e.pendente) {
-      const mudou = tentarVender(e, q);
-      return { ok: true, acao: e.pendente ? (e.pendente.segurandoDesde ? "segurando" : "a caminho") : "vendeu", mudou };
-    }
-    if (e.ligado === false) return { ok: true, acao: "desligado" };
+    let mudou = false;
+    for (const p of [...e.pendentes]) mudou = tentarVender(e, q, p) || mudou;
+    if (e.ligado === false) return { ok: true, acao: "desligado", mudou };
+    if (e.pendentes.length >= MAX_SIMULTANEAS) return { ok: true, acao: "limite de operações simultâneas", mudou };
     if (e.ultimaOp && agora - e.ultimaOp < (e.config.intervaloMin ?? 1) * 60000) return { ok: true, acao: "intervalo" };
     const total = totalBrl(e);
-    if (total < 50) { if (agora - (e.avisoSemSaldo || 0) > 3600000) { e.avisoSemSaldo = agora; log(e, "Sem reais para operar.", "warn"); } return { ok: true, acao: "sem saldo" }; }
+    if (total < 50) {
+      if (!e.pendentes.length && agora - (e.avisoSemSaldo || 0) > 3600000) { e.avisoSemSaldo = agora; log(e, "Sem reais para operar.", "warn"); }
+      return { ok: true, acao: e.pendentes.length ? "todo o saldo em operação" : "sem saldo", mudou };
+    }
     const valor = Math.floor(Math.min(e.config.max, total) * 100) / 100;
     const r = melhorRota(e, q, valor);
     if (!r) return { ok: true, acao: "sem rota" };
@@ -201,14 +243,15 @@ export async function executarManual(a, b, valorPedido) {
   const q = await precos([a, b]);
   if (!q[a] || !q[b]) throw new Error(`sem preço agora da ${!q[a] ? nome(a) : nome(b)}`);
   return alterar(e => {
-    if (e.pendente) return { ok: false, semGravar: true, erro: `já existe uma operação em andamento (${nome(e.pendente.a)} → ${nome(e.pendente.b)}). Espere ela terminar.` };
     const total = totalBrl(e);
+    if (e.pendentes.length >= MAX_SIMULTANEAS) return { ok: false, semGravar: true, erro: `já há ${MAX_SIMULTANEAS} operações em andamento. Espere uma terminar.` };
+    if (total < 50 && e.pendentes.length) return { ok: false, semGravar: true, erro: "todo o saldo está em operações em andamento. Espere uma terminar." };
     const valor = Math.floor(Math.min(+valorPedido || e.config.max, total) * 100) / 100;
     if (valor < 50) return { ok: false, semGravar: true, erro: `sem reais suficientes (total ${R(total)})` };
     const r = calcRota(e.config, a, b, valor, q[a], q[b]);
     if (r.faltou) return { ok: false, semGravar: true, erro: "não há ofertas suficientes no livro para esse valor" };
     if (r.lucro <= 0 || r.pct < e.config.minimo) return { ok: false, semGravar: true, erro: `essa rota agora daria ${RS(r.lucro)} (${pct(r.pct)}), abaixo do mínimo de ${nf(e.config.minimo, 2)}%. Para proteger o saldo, não executei.` };
-    comprar(e, r, true);
-    return { ok: true, rota: { a, b, valor, lucro: r.lucro, pct: r.pct, chegaEm: e.pendente.chegaEm } };
+    const p = comprar(e, r, true);
+    return { ok: true, rota: { id: p.id, a, b, valor, lucro: r.lucro, pct: r.pct, chegaEm: p.chegaEm } };
   });
 }

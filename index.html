@@ -668,7 +668,8 @@ function motivoInviavel(r){
   if(servidor){
     const total = Object.values(sim.saldos).reduce((t, x) => t + x.brl, 0), min = servidor.config.minimo;
     if(REAL && servidor.conectadas && (!servidor.conectadas.includes(r.a) || !servidor.conectadas.includes(r.b))) return "corretora não conectada no modo real";
-    if(servidor.pendente) return "espere a operação em andamento terminar";
+    if(REAL && servidor.pendente) return "espere a operação em andamento terminar";
+    if(!REAL && total < 50 && (servidor.pendentes || []).length) return "todo o saldo está em operação; espere uma terminar";
     if(REAL && sim.saldos[r.a].brl < 20) return `sem saldo em reais na ${nome(r.a)}`;
     if(!REAL && total < 50) return "sem reais no simulador";
     if(r.lucro <= 0 || r.pct < min) return r.lucro <= 0 ? "daria prejuízo agora" : `abaixo do mínimo de ${nf(min, 2)}%`;
@@ -1446,7 +1447,7 @@ function renderServidor(){
       <div><span class="eyebrow">Última verificação</span><b>${verif ? hora(verif) : "—"}</b></div>
       <div><span class="eyebrow">Lucro hoje</span><b class="${hh.reduce((t,h)=>t+h.lucro,0) >= 0 ? "good" : "bad"}">${RS(hh.reduce((t,h)=>t+h.lucro,0))}</b></div>
       <div><span class="eyebrow">Operações hoje</span><b>${hh.length}</b></div>
-      <div><span class="eyebrow">Agora</span><b style="font-size:13px;font-family:var(--sans)">${p ? (REAL && p.rotulo ? esc(p.segurandoMsg || p.rotulo) : p.segurandoDesde ? `segurando USDT na ${nome(p.b)} até vender sem prejuízo` : `USDT a caminho da ${nome(p.b)}`) : lig ? "procurando oportunidade" : REAL ? "automático desligado · Executar manual liberado" : "parado (desligado)"}</b></div>
+      <div><span class="eyebrow">Agora</span><b style="font-size:13px;font-family:var(--sans)">${!REAL && (servidor.pendentes || []).length > 1 ? `${servidor.pendentes.length} operações em andamento` + (servidor.pendentes.some(x => x.segurandoDesde) ? " · alguma segurando USDT" : "") : p ? (REAL && p.rotulo ? esc(p.segurandoMsg || p.rotulo) : p.segurandoDesde ? `segurando USDT na ${nome(p.b)} até vender sem prejuízo` : `USDT a caminho da ${nome(p.b)}`) : lig ? "procurando oportunidade" : REAL ? "automático desligado · Executar manual liberado" : "parado (desligado)"}</b></div>
     </div>
     <div class="faint" style="font-size:12px;margin-top:10px">${REAL ? `<div class="row" style="margin-bottom:8px"><label class="f">Valor máximo por operação (R$)<input id="rMax" type="number" min="20" step="10" value="${c.max}" style="width:150px"></label><label class="f">Lucro mínimo (%)<input id="rMin" type="number" min="0" step="0.01" value="${c.minimo}" style="width:120px"></label><button id="rSalvar" style="align-self:flex-end">Salvar regras</button></div><div class="row" style="margin-bottom:8px;align-items:center"><span>BRLA na carteira do robô: <b class="num">${R(sim.saldos.polygon ? sim.saldos.polygon.brl : 0)}</b></span><button id="rSacar" ${(sim.saldos.polygon && sim.saldos.polygon.brl >= 1 && !servidor.pendente) ? "" : "disabled"}>Sacar tudo para a Picnic</button><span class="faint">depois é só fazer o Pix no app da Picnic (grátis)</span></div>Corretoras conectadas: ${(servidor.conectadas || []).map(nome).join(" e ")}. Gás na carteira do robô: ${nf(servidor.pol || 0, 2)} POL.` : "A página atualiza estes números sozinha a cada minuto. Para mudar mínimo, valor ou saldos do robô 24h, é só me pedir no chat."}</div>`;
 }
@@ -1454,7 +1455,7 @@ function renderServidor(){
 // ---------- execução manual no servidor (um clique)
 let opSrv = null;
 async function executarServidor(a, b, valor){
-  if(servidor && servidor.pendente){ toast("Já existe uma operação em andamento. Espere ela terminar.", "acc"); return; }
+  if(REAL && servidor && servidor.pendente){ toast("Já existe uma operação em andamento. Espere ela terminar.", "acc"); return; }
   if(opSrv) return;
   pedirNotificacao();
   opSrv = { a, b, inicio: Date.now(), etapa: 1, desc: {} };
@@ -1471,7 +1472,7 @@ async function executarServidor(a, b, valor){
     $("#mExecValor").textContent = R(d.rota.valor);
     opSrv.desc[1] = `Lucro previsto ${RS(d.rota.lucro)} (${pct(d.rota.pct)}) já com todas as taxas.`;
     opSrv.etapa = 4; await lerServidor();
-    if(servidor && servidor.pendente) opSrv.id = servidor.pendente.id;
+    if(d.rota.id) opSrv.id = d.rota.id; else if(servidor && servidor.pendente) opSrv.id = servidor.pendente.id;
     acompanharSrv();
   }catch(err){
     opSrv.desc[opSrv.etapa] = "Não executado: " + err.message; desenharSrv(true);
@@ -1491,7 +1492,7 @@ function desenharSrv(falhou){
 }
 async function acompanharSrv(){
   const o = opSrv; if(!o) return;
-  const p = servidor && servidor.pendente;
+  const p = servidor && ((servidor.pendentes || []).find(x => x.id === o.id) || servidor.pendente);
   o.desc[2] = "Reais prontos na corretora de compra."; o.desc[3] = p ? `Comprou ${nf(p.usdt)} USDT na ${nome(p.a)} a ${P4(p.medioCompra)}.` : "Comprado.";
   o.desc[4] = p ? `Enviando para a ${nome(p.b)}. Chegam ${nf(p.chega)} USDT.` : "Enviado.";
   o.etapa = 5;
@@ -1513,7 +1514,7 @@ async function acompanharSrv(){
       toast(`${nome(h.a)} → ${nome(h.b)} concluída: ${RS(h.lucro)}`); notificar("Operação concluída (simulação)", `${nome(h.a)} → ${nome(h.b)}: ${RS(h.lucro)}`);
       break;
     }
-    const pp = servidor && servidor.pendente;
+    const pp = servidor && ((servidor.pendentes || []).find(x => x.id === o.id) || (REAL ? servidor.pendente : null));
     if(pp && pp.segurandoDesde){
       o.desc[6] = `O preço piorou. Segurando o USDT na ${nome(o.b)} para não vender no prejuízo; vende assim que der. Pode fechar esta janela: o servidor continua cuidando.`;
       desenharSrv(); $("#mExecEy").textContent = "Segurando";
