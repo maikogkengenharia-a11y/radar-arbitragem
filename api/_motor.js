@@ -65,8 +65,22 @@ function migrar(e) {
     e.taxasVersao = 4;
     log(e, "Regra nova: até R$ 2.500 por operação (com R$ 5.000 dá para 2 ao mesmo tempo). Se o USDT ficar preso, o robô procura outra corretora onde a venda dê lucro.", "acc");
   }
+  if ((e.taxasVersao || 0) < 5) {
+    // 20/10 09:43: recomeçar do zero para testar no manual: R$ 5.000 na Binance, uma operação por vez, robô automático desligado
+    const h = e.hist || [], soma = h.reduce((t, x) => t + (x.lucro || 0), 0);
+    e.rodadasAnteriores = e.rodadasAnteriores || [];
+    e.rodadasAnteriores.push({ fim: Date.now(), aportes: e.aportes, operacoes: h.length, lucro: soma, pendente: e.pendentes || e.pendente || null, hist: h });
+    for (const c of Object.keys(e.saldos)) e.saldos[c] = { brl: 0, usdt: 0 };
+    e.saldos.binance = { brl: 5000, usdt: 0 };
+    e.aportes = 5000; e.hist = []; e.pendentes = []; e.pendente = null; e.ultimaOp = 0;
+    e.config.max = 5000; e.config.minimo = 0.02;
+    e.ligado = false;
+    e.criado = Date.now();
+    e.taxasVersao = 5;
+    e.log = [{ t: Date.now(), txt: "Simulação reiniciada: R$ 5.000 na Binance, uma operação por vez, robô automático DESLIGADO (modo manual: clique em Executar nas oportunidades). Lucro mínimo 0,02%.", tipo: "good" }];
+  }
 }
-const MAX_SIMULTANEAS = 3;
+const MAX_SIMULTANEAS = 1; // uma operação por vez (pedido do usuário em 20/10)
 // várias operações ao mesmo tempo; "pendente" continua existindo (a mais antiga) para o painel
 function normalizar(e) {
   if (!Array.isArray(e.pendentes)) e.pendentes = e.pendente ? [e.pendente] : [];
