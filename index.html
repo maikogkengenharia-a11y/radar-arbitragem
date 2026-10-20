@@ -355,11 +355,11 @@ svg text{fill:var(--muted);font:10px var(--mono)}
       <div class="h2"><span class="idx">02</span><h2><em>oportunidades</em></h2><span class="eyebrow" id="opsSub"></span></div>
       <div class="row">
         <label class="f">Valor por operação (R$)<input id="opValor" type="number" min="50" step="100" class="num" style="width:150px"></label>
-        <label class="f">Mostrar<select id="opFiltro"><option value="todas">todas as rotas</option><option value="viaveis">só as viáveis</option></select></label>
+        <label class="f">Mostrar<select id="opFiltro"><option value="saldo">saindo de onde tenho saldo</option><option value="viaveis">só as viáveis</option><option value="todas">todas as rotas</option></select></label>
         <div class="banner info" style="flex:1;min-width:240px">Lucro já descontando taxa de compra, taxa de saque do USDT e taxa de venda, usando as ofertas reais do livro de cada corretora.</div>
       </div>
-      <div class="rk" id="ranking"></div>
       <div class="ops" id="ops"></div>
+      <div class="rk" id="ranking"></div>
     </section>
 
     <!-- 03 AUTOBOT -->
@@ -874,7 +874,12 @@ function renderOps(){
   $("#nOps").hidden = !viaveis.length; $("#nOps").textContent = viaveis.length;
   $("#nOps2").hidden = !viaveis.length; $("#nOps2").textContent = viaveis.length;
   $("#opsSub").textContent = `${viaveis.length} viáveis de ${lista.length} rotas · ${cfg.modo === "transferir" ? "com transferência" : "saldo nas duas"}`;
-  const mostrar = ($("#opFiltro").value === "viaveis" ? viaveis : lista).slice(0, 24);
+  const filtro = $("#opFiltro").value;
+  const temSaldoEm = c => sim.saldos[c] && sim.saldos[c].brl >= 50;
+  const ordenar = l => [...l].sort((x, y) => (motivoInviavel(x) ? 1 : 0) - (motivoInviavel(y) ? 1 : 0) || (temSaldoEm(y.a) ? 1 : 0) - (temSaldoEm(x.a) ? 1 : 0) || y.lucro - x.lucro);
+  const base = filtro === "viaveis" ? viaveis : filtro === "saldo" ? lista.filter(r => temSaldoEm(r.a)) : lista;
+  const mostrar = ordenar(base).slice(0, 24);
+  const onde = Object.keys(sim.saldos).filter(temSaldoEm).map(nome).join(" e ");
   $("#ops").innerHTML = mostrar.length ? mostrar.map(r => {
     const m = motivoInviavel(r);
     const sal = m && (m.includes("saldo") || m.includes("falta")), nc = m && m.includes("não conectada");
@@ -890,7 +895,8 @@ function renderOps(){
       <div class="why">${m ? esc(m) : `compra ${P4(r.medioCompra)} · venda ${P4(r.medioVenda)} · custos ${R(custo)} · com ${R(r.valor)}`}</div>
       <button class="go" data-exec="${r.a}|${r.b}" ${emExecucao || (servidor && m) ? "disabled" : ""}>${servidor && m ? (nc ? "Conectar corretora" : "Aguardando lucro") : REAL ? "⚡ Executar (real)" : "⚡ Executar"}</button>
     </div>`;
-  }).join("") : `<div class="empty">Sem rotas para mostrar. ${dados ? "Ative pelo menos duas corretoras em Configurações." : "Lendo preços…"}</div>`;
+  }).join("") : `<div class="empty">${!dados ? "Lendo preços…" : filtro === "saldo" ? (onde ? `Nenhuma rota saindo de onde está o seu dinheiro (${onde}) agora.` : "Você não tem saldo em reais em nenhuma corretora.") : "Sem rotas para mostrar."}</div>`;
+  if(filtro === "saldo" && mostrar.length && !viaveis.length) $("#ops").insertAdjacentHTML("afterbegin", `<div class="banner info" style="grid-column:1/-1">Seu dinheiro está na ${esc(onde)}. Nenhuma rota saindo de lá dá lucro neste momento (todas abaixo do mínimo), então o botão fica em "Aguardando lucro". Quando alguma ficar verde, é só clicar em Executar.</div>`);
 }
 $("#opValor").addEventListener("change", renderOps);
 $("#opFiltro").addEventListener("change", renderOps);
