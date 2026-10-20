@@ -25,6 +25,7 @@ export async function lerEstado() {
   // primeira vez: começa do estado inicial guardado no GitHub
   const s = await fetch(SEMENTE, { signal: AbortSignal.timeout(10000) });
   const e = await s.json();
+  migrar(e);
   e.ligado = e.ligado !== false;
   return { e, etag: null };
 }
@@ -40,6 +41,23 @@ function migrar(e) {
     e.config.taxas.picnic = 0.01; // resgate BRLA → Pix na Picnic é grátis (conferido em 19/10); sobra só a taxa de rede
     e.taxasVersao = 2;
     e.log.unshift({ t: Date.now(), txt: "Taxa real da Picnic aplicada: resgate de BRLA para Pix grátis", tipo: "acc" });
+  }
+  if ((e.taxasVersao || 0) < 3) {
+    // nova rodada da simulação pedida pelo usuário em 20/10: R$ 5.000 na Binance, lucro mínimo 0,02%
+    const h = e.hist || [], soma = h.reduce((t, x) => t + (x.lucro || 0), 0);
+    e.rodadasAnteriores = e.rodadasAnteriores || [];
+    e.rodadasAnteriores.push({ fim: Date.now(), aportes: e.aportes, operacoes: h.length, lucro: soma, pendente: e.pendente || null, hist: h });
+    for (const c of Object.keys(e.saldos)) e.saldos[c] = { brl: 0, usdt: 0 };
+    e.saldos.binance = { brl: 5000, usdt: 0 };
+    e.aportes = 5000;
+    e.hist = [];
+    e.pendente = null;
+    e.ultimaOp = 0;
+    e.config.minimo = 0.02;
+    e.config.max = 5000;
+    e.criado = Date.now();
+    e.taxasVersao = 3;
+    e.log.unshift({ t: Date.now(), txt: `Nova simulação: R$ 5.000 na Binance, lucro mínimo 0,02% já com todas as taxas, até R$ 5.000 por operação. Rodada anterior (R$ 1.000): ${h.length} operações, ${RS(soma)}; a operação que estava segurando USDT foi encerrada.`, tipo: "good" });
   }
 }
 export async function salvarEstado(e, etag) {

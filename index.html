@@ -577,11 +577,11 @@ const PADRAO = {
   saque: {binance:0.03,bitget:0.10,bybit:0.30,kucoin:1,mercadobitcoin:1,bitso:1,novadax:1,foxbit:1,mexc:0.10,avenia:0.02,chainless:0.02,picnic:0.02,polygon:0.02},
   rede: {binance:"BEP20",bitget:"BEP20",bybit:"BEP20",kucoin:"TRC20",mercadobitcoin:"Polygon",bitso:"TRC20",novadax:"TRC20",foxbit:"TRC20",mexc:"BEP20",avenia:"Polygon",chainless:"Polygon",picnic:"Polygon",polygon:"Polygon"},
   nacional: {binance:false,bitget:false,bybit:false,kucoin:false,mercadobitcoin:true,bitso:false,novadax:true,foxbit:true,mexc:false,avenia:true,chainless:true,picnic:true,polygon:false},
-  valor: 5000, minimo: 0.10, modo: "transferir", tempo: 3, acelerar: true,
+  valor: 5000, minimo: 0.02, modo: "transferir", tempo: 3, acelerar: true,
   iniBrl: 0, iniUsdt: 0,
 };
-const AUTO_PADRAO = { on:true, rebal:true, corretoras:["binance","bitget","bybit","mercadobitcoin","bitso","foxbit","avenia","chainless","picnic","polygon"], minimo:0.1, max:5000, intervalo:1, ultima:0 };
-const MINIMOS = [0.05,0.1,0.2,0.3,0.5,1], INTERVALOS = [1,2,3,5,10], POLL_MS = 4000, POR_PAG = 20;
+const AUTO_PADRAO = { on:true, rebal:true, corretoras:["binance","bitget","bybit","mercadobitcoin","bitso","foxbit","avenia","chainless","picnic","polygon"], minimo:0.02, max:5000, intervalo:1, ultima:0 };
+const MINIMOS = [0.02,0.05,0.1,0.2,0.3,0.5,1], INTERVALOS = [1,2,3,5,10], POLL_MS = 4000, POR_PAG = 20;
 
 // ============================================================ estado
 const ler = (k, d) => { try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } };
