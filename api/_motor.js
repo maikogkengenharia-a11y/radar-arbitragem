@@ -257,6 +257,30 @@ export async function tick() {
   });
 }
 
+// botão "Vender agora mesmo assim": vende o USDT na hora, mesmo com prejuízo (só quando o usuário pede)
+export async function venderAgora(id) {
+  const { e: e0 } = await lerEstado();
+  const p0 = (e0.pendentes || []).find(x => !id || x.id === +id);
+  if (!p0) throw new Error("não há operação em andamento");
+  const q = await precos([p0.b]);
+  if (!q[p0.b]) throw new Error(`sem preço agora da ${nome(p0.b)}`);
+  return alterar(e => {
+    const p = e.pendentes.find(x => x.id === p0.id);
+    if (!p) return { ok: false, semGravar: true, erro: "essa operação já terminou" };
+    const x = venderEm(e, q, p.b, p.chega);
+    if (!x) return { ok: false, semGravar: true, erro: "livro de ofertas curto para vender agora" };
+    const agora = Date.now(), lucro = x.final - p.valor;
+    e.saldos[p.b].usdt -= p.chega; e.saldos[p.b].brl += x.final;
+    e.hist.unshift({ id: p.id, t: agora, a: p.a, b: p.b, valor: p.valor, usdt: p.chega, compra: p.medioCompra, venda: x.v.medio,
+      taxas: (p.taxaA + p.saque) * p.medioCompra + x.v.rec * x.fb, lucro, pct: lucro / p.valor * 100, previsto: p.previsto,
+      auto: !p.manual, final: x.final, modo: "transferir", servidor: true, duracao: agora - p.inicio, via: p.via || null, forcada: true });
+    log(e, `Venda forçada por você: ${nome(p.a)} → ${nome(p.b)} · ${RS(lucro)} (${pct(lucro / p.valor * 100)}). Dinheiro de volta em reais na ${nome(p.b)}.`, lucro >= 0 ? "good" : "warn");
+    e.ultimaOp = agora;
+    e.pendentes = e.pendentes.filter(y => y !== p);
+    return { ok: true, lucro, final: x.final, b: p.b };
+  });
+}
+
 // botão Executar (manual)
 export async function executarManual(a, b, valorPedido) {
   if (!(a in BRL) || !(b in BRL) || a === b) throw new Error("rota inválida");

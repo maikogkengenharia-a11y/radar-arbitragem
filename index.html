@@ -961,6 +961,19 @@ function notificar(titulo, corpo){ try{ if("Notification" in window && Notificat
 $("#mConfGo").addEventListener("click", () => { pedirNotificacao();
   if($("#mConfDireto").checked){ cfg.semConfirmar = true; gravar("mesa_cfg", cfg); toast("Pronto: das próximas vezes o Executar já faz tudo direto. Dá para desligar em Configurações.", "acc"); }
   prepararSaldo(confRota.a, +$("#mConfValor").value); $("#mConf").hidden = true; executar(confRota.a, confRota.b, +$("#mConfValor").value, false); });
+// "Vender agora mesmo assim": tira o dinheiro da operação na hora, mesmo com prejuízo
+async function venderJa(){
+  const p = servidor && servidor.pendente; if(!p) return;
+  if(!confirm(`Vender agora mesmo assim?\n\n${REAL ? "O robô vende o USDT na hora (ou assim que ele chegar, se ainda estiver a caminho)" : `O USDT na ${nome(p.b)} é vendido na hora`}, MESMO QUE DÊ PREJUÍZO.\nO dinheiro volta para reais/BRLA na sua conta.`)) return;
+  try{
+    const r = REAL ? await fetch("/api/real?p=vender", {method:"POST", headers: hdrReal(), body: "{}"})
+      : await fetch("/api/vender", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({id: p.id})});
+    const d = await r.json(); if(!d.ok) throw new Error(d.erro || "não vendeu");
+    toast(REAL ? (d.naHora ? "Vendendo agora. O resultado aparece no Histórico em instantes." : "O USDT está a caminho: o robô vende assim que chegar.") : `Vendido: ${RS(d.lucro)}. Dinheiro de volta na ${nome(d.b)}.`, d.lucro < 0 ? "acc" : "");
+    await lerServidor();
+  }catch(err){ toast("Não consegui vender: " + err.message, "bad"); }
+}
+document.addEventListener("click", e => { if(e.target.closest("#bVenderJa, #mVenderJa")) venderJa(); });
 $("#mExecMin").addEventListener("click", () => { $("#mExec").hidden = true; if(emExecucao) toast("A operação continua rodando. Ela aparece no Histórico quando terminar.", "acc"); });
 
 const PASSOS_T = [
@@ -1447,7 +1460,7 @@ function renderServidor(){
       <div><span class="eyebrow">Última verificação</span><b>${verif ? hora(verif) : "—"}</b></div>
       <div><span class="eyebrow">Lucro hoje</span><b class="${hh.reduce((t,h)=>t+h.lucro,0) >= 0 ? "good" : "bad"}">${RS(hh.reduce((t,h)=>t+h.lucro,0))}</b></div>
       <div><span class="eyebrow">Operações hoje</span><b>${hh.length}</b></div>
-      <div><span class="eyebrow">Agora</span><b style="font-size:13px;font-family:var(--sans)">${!REAL && (servidor.pendentes || []).length > 1 ? `${servidor.pendentes.length} operações em andamento` + (servidor.pendentes.some(x => x.segurandoDesde) ? " · alguma segurando USDT" : "") : p ? (REAL && p.rotulo ? esc(p.segurandoMsg || p.rotulo) : p.segurandoDesde ? `segurando USDT na ${nome(p.b)} até vender sem prejuízo` : `USDT a caminho da ${nome(p.b)}`) : lig ? "procurando oportunidade" : REAL ? "automático desligado · Executar manual liberado" : "parado (desligado)"}</b></div>
+      <div><span class="eyebrow">Agora</span>${p && (p.segurandoDesde || REAL) && !p.forcar ? `<button class="go sm sell" id="bVenderJa" style="float:right;margin-top:-4px">Vender agora mesmo assim</button>` : ""}<b style="font-size:13px;font-family:var(--sans)">${!REAL && (servidor.pendentes || []).length > 1 ? `${servidor.pendentes.length} operações em andamento` + (servidor.pendentes.some(x => x.segurandoDesde) ? " · alguma segurando USDT" : "") : p ? (REAL && p.rotulo ? esc(p.segurandoMsg || p.rotulo) : p.segurandoDesde ? `segurando USDT na ${nome(p.b)} até vender sem prejuízo` : `USDT a caminho da ${nome(p.b)}`) : lig ? "procurando oportunidade" : REAL ? "automático desligado · Executar manual liberado" : "parado (desligado)"}</b></div>
     </div>
     <div class="faint" style="font-size:12px;margin-top:10px">${REAL ? `<div class="row" style="margin-bottom:8px"><label class="f">Valor máximo por operação (R$)<input id="rMax" type="number" min="20" step="10" value="${c.max}" style="width:150px"></label><label class="f">Lucro mínimo (%)<input id="rMin" type="number" min="0" step="0.01" value="${c.minimo}" style="width:120px"></label><button id="rSalvar" style="align-self:flex-end">Salvar regras</button></div><div class="row" style="margin-bottom:8px;align-items:center"><span>BRLA na carteira do robô: <b class="num">${R(sim.saldos.polygon ? sim.saldos.polygon.brl : 0)}</b></span><button id="rSacar" ${(sim.saldos.polygon && sim.saldos.polygon.brl >= 1 && !servidor.pendente) ? "" : "disabled"}>Sacar tudo para a Picnic</button><span class="faint">depois é só fazer o Pix no app da Picnic (grátis)</span></div>Corretoras conectadas: ${(servidor.conectadas || []).map(nome).join(" e ")}. Gás na carteira do robô: ${nf(servidor.pol || 0, 2)} POL.` : "A página atualiza estes números sozinha a cada minuto. Para mudar mínimo, valor ou saldos do robô 24h, é só me pedir no chat."}</div>`;
 }
@@ -1518,6 +1531,7 @@ async function acompanharSrv(){
     if(pp && pp.segurandoDesde){
       o.desc[6] = `O preço piorou. Segurando o USDT na ${nome(o.b)} para não vender no prejuízo; vende assim que der. Pode fechar esta janela: o servidor continua cuidando.`;
       desenharSrv(); $("#mExecEy").textContent = "Segurando";
+      if(!$("#mVenderJa")) $("#mExecRes").innerHTML = `<button class="go sell" id="mVenderJa" style="width:100%">Vender agora mesmo assim</button>`;
     } else if(REAL && pp && pp.rotulo){ o.desc[o.etapa] = pp.rotulo + "…"; desenharSrv(); }
     else { o.desc[6] = `Vendendo na ${nome(o.b)}…`; desenharSrv(); }
     await dorme(5000);

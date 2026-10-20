@@ -439,11 +439,12 @@ async function avancar(op) {
       const wei = quer < c.usdtWei ? quer : c.usdtWei;
       if (wei <= 0n) throw new Error("carteira sem USDT para vender");
       const falta = op.custo - (op.brlAcum || 0);
-      const minimo = falta + GAS_BRL; // nunca abaixo do que custou
+      let minimo = falta + GAS_BRL; // nunca abaixo do que custou
+      if (op.forcar) { const q = await kyRota(USDT, BRLA, wei); minimo = q.saida * 0.995; } // venda forçada: aceita o preço de agora (no máx. 0,5% pior)
       const h = await iniciarTroca(op, USDT, BRLA, wei, minimo);
       if (!h) {
         // caminho alternativo: mandar o USDT para a Binance e vender lá, se der lucro
-        if (!op.redirecionado) {
+        if (!op.redirecionado && !op.forcar) {
           const [L, fee] = await Promise.all([livro(), taxa()]);
           const u = +ethers.formatUnits(wei, 6), v = vender(L.bids, u);
           const brl = v ? v.brl * (1 - fee) : 0;
@@ -547,10 +548,11 @@ async function avancar(op) {
           finalizar(op, op.brlAcum, { sobraUsdt: +op.usdtBinance.toFixed(4) });
           return;
         }
-        const precoMin = cima(falta / (qtd * (1 - fee)), R.tick); // vender abaixo disso daria prejuízo
+        let precoMin = cima(falta / (qtd * (1 - fee)), R.tick); // vender abaixo disso daria prejuízo
+        if (op.forcar) precoMin = baixo(melhor * 0.997, R.tick); // venda forçada: preço de agora
         if (melhor < precoMin) {
           // caminho alternativo: sacar para a carteira e vender por BRLA na KyberSwap, se der lucro
-          if (!op.redirecionado) {
+          if (!op.redirecionado && !op.forcar) {
             const N = await rede().catch(() => null);
             const chega = N ? qtd - N.taxa : 0;
             const k = chega > 0 && N && N.saqueOk ? await kyRota(USDT, BRLA, chega).catch(() => null) : null;
@@ -575,7 +577,7 @@ async function avancar(op) {
       op.n++;
       op.brlAcum += res.brl; op.usdtBinance -= +o.executedQty;
       if (res.brl > 0) log(`Vendeu ${(+o.executedQty).toFixed(4)} USDT por R$ ${r2(res.brl)} na Binance`);
-      if (op.usdtBinance < R.minQtd || op.brlAcum >= op.custo) finalizar(op, op.brlAcum, op.usdtBinance > 1e-6 ? { sobraUsdt: +op.usdtBinance.toFixed(4) } : {});
+      if (op.usdtBinance < R.minQtd || op.brlAcum >= op.custo || (op.forcar && op.n >= 3)) finalizar(op, op.brlAcum, op.usdtBinance > 1e-6 ? { sobraUsdt: +op.usdtBinance.toFixed(4) } : {});
       return;
     }
     default:
@@ -701,7 +703,7 @@ function painel() {
       id: op.id, a, b, valor: op.custo, usdt, medioCompra: usdt ? op.custo / usdt : 0,
       chega: op.usdtChegou || (op.saque ? op.saque - op.taxaSaque : usdt),
       chegaEm: op.inicio + (op.tipo === "A" ? 4 : 10) * 60e3, segurandoDesde: op.segurandoDesde || null,
-      etapa: op.etapa, rotulo: ROTULO[op.etapa], erro: op.erro || null, segurandoMsg: op.segurandoMsg || null,
+      etapa: op.etapa, rotulo: ROTULO[op.etapa], erro: op.erro || null, segurandoMsg: op.segurandoMsg || null, forcar: !!op.forcar,
     };
   }
   return {
@@ -712,6 +714,18 @@ function painel() {
     pendente, carteira: CARTEIRA.address, pol: sc.POL ?? 0, criado: E.radarDesde || agora(),
   };
 }
+// "Vender agora mesmo assim": o robô vende na hora (ou assim que o USDT chegar), mesmo com prejuízo
+function venderAgoraReal() {
+  const op = E.op;
+  if (!op) throw new Error("não há operação em andamento");
+  if (["comprar", "trocarB", "trocarB_conf"].includes(op.etapa)) throw new Error("a operação está começando agora; espere alguns segundos");
+  op.forcar = true; delete op.avisoEm;
+  const naHora = ["vender", "vender_binance"].includes(op.etapa);
+  log(`Você pediu para vender agora, mesmo com prejuízo. ${naHora ? "Vendendo…" : "O USDT está a caminho: vende assim que chegar."}`, "op");
+  salvar();
+  return { ok: true, naHora, etapa: ROTULO[op.etapa] };
+}
+
 // execução de um clique pelo painel, com dinheiro real
 async function executarManual(a, b, pedido) {
   const tipo = a === "binance" && b === "polygon" ? "A" : a === "polygon" && b === "binance" ? "B" : null;
@@ -793,6 +807,9 @@ http.createServer(async (req, res) => {
     if (!pinOk(req)) return enviar(401, { erro: agora() < bloqueadoAte ? "Muitas tentativas. Espere 10 minutos." : "PIN incorreto" });
     if (req.method === "GET" && url.pathname === "/estado") return enviar(200, publico());
     if (req.method === "GET" && url.pathname === "/painel") return enviar(200, painel());
+    if (req.method === "POST" && url.pathname === "/vender") {
+      try { return enviar(200, venderAgoraReal()); } catch (e) { return enviar(200, { ok: false, erro: msg(e) }); }
+    }
     if (req.method === "POST" && url.pathname === "/sacar") {
       let corpo = "";
       for await (const p of req) { corpo += p; if (corpo.length > 10000) break; }
