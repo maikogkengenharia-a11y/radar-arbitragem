@@ -298,32 +298,35 @@ async function conferirTroca(op, para) {
 function limparTx(op) { delete op.tx; delete op.txAssinada; delete op.txEm; delete op.reenviada; delete op.antes; }
 
 // ---------------------------------------------------------------- avaliação (quanto daria agora)
+// quanto daria agora uma rota com um valor específico
+async function calcRota(tipo, valor, L, fee, N) {
+  if (tipo === "A") {
+    const g = gastar(L.asks, valor);
+    const u = g ? g.usdt * (1 - fee) - N.taxa : 0;
+    if (u <= 0) return null;
+    const k = await kyRota(USDT, BRLA, u);
+    const lucro = k.saida - valor - GAS_BRL;
+    return { valor, usdt: u, recebe: k.saida, lucro, pct: (lucro / valor) * 100 };
+  }
+  const k = await kyRota(BRLA, USDT, valor);
+  const s = vender(L.bids, k.saida);
+  if (!s) return null;
+  const brl = s.brl * (1 - fee);
+  const lucro = brl - valor - GAS_BRL * 2;
+  return { valor, usdt: k.saida, recebe: brl, lucro, pct: (lucro / valor) * 100 };
+}
+const saldoRota = tipo => tipo === "A" ? (E.saldos?.binance?.BRL ?? 0) : (E.saldos?.carteira?.BRLA ?? 0);
+
 async function avaliar() {
   const [L, fee] = await Promise.all([livro(), taxa()]);
   const N = await rede().catch(() => ({ taxa: 0.03 }));
-  const cfg = E.config, sb = E.saldos?.binance, sc = E.saldos?.carteira;
+  const cfg = E.config;
   const out = { t: agora(), taxa: fee, saque: N.taxa, ask: L.asks[0]?.[0], bid: L.bids[0]?.[0] };
-  // Rota A
-  const vAreal = Math.floor(Math.min(cfg.max, sb ? sb.BRL : 0) * 100) / 100;
-  const vA = vAreal >= cfg.minValor ? vAreal : cfg.max;
-  {
-    const g = gastar(L.asks, vA);
-    const u = g ? g.usdt * (1 - fee) - N.taxa : 0;
-    if (u > 0) {
-      const k = await kyRota(USDT, BRLA, u);
-      const lucro = k.saida - vA - GAS_BRL;
-      out.A = { valor: vA, usdt: u, recebe: k.saida, lucro, pct: (lucro / vA) * 100, hipotetico: vAreal < cfg.minValor };
-    }
-  }
-  // Rota B
-  const vB = Math.floor(Math.min(cfg.max, sc ? sc.BRLA : 0) * 100) / 100;
-  const vBteste = vB >= cfg.minValor ? vB : cfg.max;
-  const k = await kyRota(BRLA, USDT, vBteste);
-  const s = vender(L.bids, k.saida);
-  if (s) {
-    const brl = s.brl * (1 - fee);
-    const lucro = brl - vBteste - GAS_BRL * 2;
-    out.B = { valor: vBteste, usdt: k.saida, recebe: brl, lucro, pct: (lucro / vBteste) * 100, hipotetico: vB < cfg.minValor };
+  for (const tipo of ["A", "B"]) {
+    const real = Math.floor(Math.min(cfg.max, saldoRota(tipo)) * 100) / 100;
+    const v = real >= cfg.minValor ? real : cfg.max;
+    const r = await calcRota(tipo, v, L, fee, N).catch(() => null);
+    if (r) out[tipo] = { ...r, hipotetico: real < cfg.minValor };
   }
   return out;
 }
@@ -355,7 +358,8 @@ function finalizar(op, recebido, extra = {}) {
   const h = {
     id: op.id, tipo: op.tipo, t: agora(), inicio: op.inicio, duracaoSeg: Math.round((agora() - op.inicio) / 1000),
     entrou: r2(op.custo), saiu: r2(recebido), lucro: r2(lucro), pct: +((lucro / op.custo) * 100).toFixed(3),
-    previsto: op.previsto, gasPol: +(op.gasPol || 0).toFixed(4), ...extra,
+    previsto: op.previsto, gasPol: +(op.gasPol || 0).toFixed(4), manual: !!op.manual,
+    usdt: +(op.tipo === "A" ? op.usdtChegou || op.usdtComprado || 0 : op.usdt || 0).toFixed(4), ...extra,
   };
   E.hist.unshift(h); E.hist = E.hist.slice(0, 500);
   E.op = null; E.fimUltimaOp = agora();
@@ -567,7 +571,7 @@ function novaOp(tipo, a) {
   return {
     id, tipo, inicio: agora(), etapaEm: agora(),
     etapa: tipo === "A" ? "comprar" : "trocarB",
-    valor: a.valor, custo: a.valor, previsto: { lucro: r2(a.lucro), pct: +a.pct.toFixed(3) },
+    valor: a.valor, custo: a.valor, previsto: { lucro: r2(a.lucro), pct: +a.pct.toFixed(3) }, manual: !!a.manual,
   };
 }
 
@@ -592,8 +596,7 @@ async function ciclo() {
   try { await rodarRadar(); } catch (e) { console.log("radar:", msg(e)); }
   await atualizarSaldos();
   if (E.op) {
-    if (!E.ligado) return;               // desligado = pausa tudo, inclusive operação em andamento
-    await avancar(E.op);
+    await avancar(E.op); // operação em andamento sempre vai até o fim (sem prejuízo); desligar só impede de começar outra
     return;
   }
   E.aval = await avaliar();
@@ -617,6 +620,7 @@ async function ciclo() {
   if (!ENV.BINANCE_KEY) { log("Modo real sem chaves da Binance: rode robo-config no servidor", "erro"); return; }
   if ((E.saldos?.carteira?.POL ?? 0) < POL_MINIMO) { log(`Carteira do robô com menos de ${POL_MINIMO} POL para pagar o gás. Mande uns 5 POL para ela.`, "erro"); return; }
   if (agora() - (E.fimUltimaOp || 0) < cfg.pausaEntreOpsSeg * 1000) return;
+  if (E.op) return;
   E.op = novaOp(melhor.tipo, melhor);
   log(`Iniciando ${melhor.tipo === "A" ? "Binance → Carteira" : "Carteira → Binance"} com R$ ${r2(melhor.valor)} (lucro previsto R$ ${r2(melhor.lucro)}, ${melhor.pct.toFixed(3)}%)`, "op");
   salvar();
@@ -648,6 +652,60 @@ async function loop() {
 }
 
 // ---------------------------------------------------------------- painel (HTTP, protegido por PIN)
+// ---------------------------------------------------------------- formato do painel do simulador (modo real)
+const ROTA_DE = { A: ["binance", "polygon"], B: ["polygon", "binance"] };
+const TIPO_LOG = { lucro: "good", erro: "bad", aviso: "warn", op: "acc", sim: "faint", info: "" };
+function painel() {
+  const sb = E.saldos?.binance || { BRL: 0, USDT: 0 }, sc = E.saldos?.carteira || { USDT: 0, BRLA: 0, POL: 0 };
+  const bid = E.aval?.bid || 5.3;
+  const total = sb.BRL + sc.BRLA + (sb.USDT + sc.USDT) * bid;
+  const hist = E.hist.map(h => {
+    const [a, b] = ROTA_DE[h.tipo], u = h.usdt || 0;
+    return { id: h.id, t: h.t, a, b, valor: h.entrou, final: h.saiu, lucro: h.lucro, pct: h.pct, previsto: h.previsto?.lucro,
+      usdt: u, compra: u ? h.entrou / u : 0, venda: u ? h.saiu / u : 0, taxas: 0, auto: !h.manual, modo: "real", duracao: h.duracaoSeg };
+  });
+  const soma = hist.reduce((t, h) => t + h.lucro, 0);
+  let pendente = null;
+  if (E.op) {
+    const op = E.op, [a, b] = ROTA_DE[op.tipo], usdt = op.usdtComprado || op.usdt || 0;
+    pendente = {
+      id: op.id, a, b, valor: op.custo, usdt, medioCompra: usdt ? op.custo / usdt : 0,
+      chega: op.usdtChegou || (op.saque ? op.saque - op.taxaSaque : usdt),
+      chegaEm: op.inicio + (op.tipo === "A" ? 4 : 10) * 60e3, segurandoDesde: op.segurandoDesde || null,
+      etapa: op.etapa, rotulo: ROTULO[op.etapa], erro: op.erro || null, segurandoMsg: op.segurandoMsg || null,
+    };
+  }
+  return {
+    real: true, ligado: E.ligado && E.modo === "real", modo: E.modo, verificado: E.saldos?.t, atualizado: E.atualizado,
+    config: { minimo: E.config.minimo, max: E.config.max }, conectadas: ENV.BINANCE_KEY ? ["binance", "polygon"] : ["polygon"],
+    saldos: { binance: { brl: sb.BRL, usdt: sb.USDT }, polygon: { brl: sc.BRLA, usdt: sc.USDT } },
+    aportes: total - soma, hist, log: E.log.map(l => ({ t: l.t, txt: l.msg, tipo: TIPO_LOG[l.tipo] ?? "" })),
+    pendente, carteira: CARTEIRA.address, pol: sc.POL ?? 0, criado: E.radarDesde || agora(),
+  };
+}
+// execução de um clique pelo painel, com dinheiro real
+async function executarManual(a, b, pedido) {
+  const tipo = a === "binance" && b === "polygon" ? "A" : a === "polygon" && b === "binance" ? "B" : null;
+  if (!tipo) throw new Error("essa rota ainda não está conectada no modo real (só Binance ↔ Carteira Polygon)");
+  if (!ENV.BINANCE_KEY) throw new Error("chaves da Binance não configuradas no servidor");
+  if (E.op) throw new Error("já existe uma operação em andamento; espere ela terminar");
+  await atualizarSaldos();
+  if ((E.saldos?.carteira?.POL ?? 0) < POL_MINIMO) throw new Error(`a carteira do robô precisa de pelo menos ${POL_MINIMO} POL para o gás`);
+  const saldo = saldoRota(tipo);
+  const valor = Math.floor(Math.min(Number(pedido) || E.config.max, saldo) * 100) / 100;
+  if (valor < E.config.minValor) throw new Error(tipo === "A" ? `saldo em reais na Binance insuficiente (R$ ${r2(saldo)})` : `pouco BRLA na carteira do robô (R$ ${r2(saldo)})`);
+  const [L, fee] = await Promise.all([livro(), taxa()]);
+  const r = await calcRota(tipo, valor, L, fee, await rede());
+  if (!r) throw new Error("livro de ofertas curto para esse valor");
+  if (r.lucro <= 0) throw new Error(`agora daria prejuízo (R$ ${r2(r.lucro)}); o robô não executa no prejuízo`);
+  if (r.pct < E.config.minimo) throw new Error(`lucro de ${r.pct.toFixed(3)}% está abaixo do mínimo de ${E.config.minimo}%`);
+  if (E.op) throw new Error("já existe uma operação em andamento; espere ela terminar");
+  E.op = novaOp(tipo, { ...r, manual: true });
+  log(`Execução manual pelo painel: ${tipo === "A" ? "Binance → Carteira" : "Carteira → Binance"} com R$ ${r2(valor)} (lucro previsto R$ ${r2(r.lucro)}, ${r.pct.toFixed(3)}%)`, "op");
+  salvar();
+  return { ok: true, rota: { valor, lucro: r2(r.lucro), pct: +r.pct.toFixed(3), chegaEm: agora() + (tipo === "A" ? 4 : 10) * 60e3 } };
+}
+
 let erradas = 0, bloqueadoAte = 0;
 function pinOk(req) {
   if (!ENV.PIN || agora() < bloqueadoAte) return false;
@@ -683,6 +741,14 @@ http.createServer(async (req, res) => {
     if (!ENV.PIN) return enviar(403, { erro: "PIN ainda não configurado: rode robo-config no servidor" });
     if (!pinOk(req)) return enviar(401, { erro: agora() < bloqueadoAte ? "Muitas tentativas. Espere 10 minutos." : "PIN incorreto" });
     if (req.method === "GET" && url.pathname === "/estado") return enviar(200, publico());
+    if (req.method === "GET" && url.pathname === "/painel") return enviar(200, painel());
+    if (req.method === "POST" && url.pathname === "/executar") {
+      let corpo = "";
+      for await (const p of req) { corpo += p; if (corpo.length > 10000) break; }
+      const b = JSON.parse(corpo || "{}");
+      try { return enviar(200, await executarManual(String(b.a || ""), String(b.b || ""), b.valor)); }
+      catch (e) { return enviar(200, { ok: false, erro: msg(e) }); }
+    }
     if (req.method === "POST" && url.pathname === "/config") {
       let corpo = "";
       for await (const p of req) { corpo += p; if (corpo.length > 10000) break; }

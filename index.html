@@ -154,6 +154,12 @@ label.f{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--mu
 .toggle.on{background:var(--good);border-color:var(--good)}
 .toggle.on::after{left:27px;background:#04160b}
 .servidor .loc{display:none!important}
+.modoBtn{cursor:pointer;background:transparent;width:100%}
+.real .modoBtn{color:var(--bad);border-color:var(--bad);background:var(--bad-soft)}
+.realbar{display:none}
+.real .realbar{position:sticky;top:8px;z-index:30;backdrop-filter:blur(6px);display:flex;align-items:center;gap:10px;justify-content:space-between;background:var(--bad-soft);border:1px solid var(--bad);color:var(--bad);border-radius:10px;padding:8px 12px;margin:0 0 14px;font:600 12px var(--mono);letter-spacing:.06em;text-transform:uppercase}
+.realbar button{font:600 11px var(--mono);padding:5px 10px;border-color:var(--bad);color:var(--bad);background:transparent}
+.st.nc{color:var(--faint);border-color:var(--rule2)}
 .servidor #btnRebal,.servidor .cx .mais,.servidor .strip .ed{display:none!important}
 .srv{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .srv>div{background:var(--bg2);border:1px solid var(--rule);border-radius:12px;padding:12px}
@@ -299,13 +305,14 @@ svg text{fill:var(--muted);font:10px var(--mono)}
       <a href="#guia" data-pg="guia"><span class="n">08</span>Guia</a>
     </nav>
     <div class="foot">
-      <div class="simtag">Modo simulador</div>
+      <button class="simtag modoBtn" id="modoBtn" title="Alternar entre simulador e dinheiro real">Modo simulador</button>
       <a href="/real.html" style="font-size:13px;font-weight:600;text-decoration:none">Robô real →</a>
       <a href="/radar.html" class="muted" style="font-size:12px;text-decoration:none">Radar de moedas →</a>
     </div>
   </aside>
 
   <main><div class="wrap">
+    <div class="realbar"><span>● Modo real · as operações usam o seu dinheiro de verdade</span><button data-modo-sim>Voltar ao simulador</button></div>
     <header class="top">
       <div>
         <h1 id="saud">Olá.</h1>
@@ -538,6 +545,7 @@ svg text{fill:var(--muted);font:10px var(--mono)}
     <a href="#impostos">Impostos <span class="faint">→</span></a>
     <a href="#config">Configurações <span class="faint">→</span></a>
     <a href="#guia">Guia <span class="faint">→</span></a>
+    <a href="#" id="modoBtnM">Operar em modo real <span class="faint">→</span></a>
     <a href="/real.html">Robô real (dinheiro de verdade) <span class="faint">→</span></a>
     <a href="/radar.html">Radar de moedas <span class="faint">→</span></a>
   </div>
@@ -599,6 +607,11 @@ const midAtual = () => dados && Object.values(dados.cotacoes).length ? Object.va
 if(sim.aportes == null){ sim.aportes = Object.values(sim.saldos).reduce((s, x) => s + x.brl + x.usdt*5.3, 0) - sim.hist.reduce((s, h) => s + h.lucro, 0); }
 
 let dados = null, rotas = [], hist = {}, ultimaOk = 0, emExecucao = null, livroAberto = {}, pagHist = 0, periodo = 0;
+// modo real (dinheiro de verdade pelo robô do servidor) ou simulador
+let REAL = ler("mesa_real", false), PIN_REAL = "";
+try{ PIN_REAL = localStorage.getItem("roboPin") || ""; }catch(e){}
+if(REAL && !PIN_REAL) REAL = false;
+
 
 // ============================================================ formatos
 const nf = (n, d=2) => n == null || !isFinite(n) ? "—" : n.toLocaleString("pt-BR",{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -651,8 +664,10 @@ function motivoInviavel(r){
   if(r.faltou) return "livro curto para esse valor";
   if(servidor){
     const total = Object.values(sim.saldos).reduce((t, x) => t + x.brl, 0), min = servidor.config.minimo;
+    if(REAL && servidor.conectadas && (!servidor.conectadas.includes(r.a) || !servidor.conectadas.includes(r.b))) return "corretora não conectada no modo real";
     if(servidor.pendente) return "espere a operação em andamento terminar";
-    if(total < 50) return "sem reais no simulador";
+    if(REAL && sim.saldos[r.a].brl < 20) return `sem saldo em reais na ${nome(r.a)}`;
+    if(!REAL && total < 50) return "sem reais no simulador";
     if(r.lucro <= 0 || r.pct < min) return r.lucro <= 0 ? "daria prejuízo agora" : `abaixo do mínimo de ${nf(min, 2)}%`;
     return "";
   }
@@ -716,13 +731,13 @@ function renderStrip(){
   const cel = cs.map(c => { const s = sim.saldos[c];
     return `<button class="cel" data-saldo="${c}" title="Alterar o saldo da ${nome(c)}"><div class="eyebrow">${nome(c)} <span class="ed">✎ editar</span></div><div class="v">${R(s.brl)}</div><div class="v2">${nf(s.usdt)} USDT</div></button>`; }).join("");
   $("#strip").innerHTML = (cel || `<div class="vazio">Nenhum saldo ainda. Clique numa corretora abaixo para colocar saldo e simular.</div>`)
-    + `<div class="tot"><div class="eyebrow">Total (virtual)</div><div class="v">${R(tot)}</div><div class="v2 ${ganho>=0?"good":"bad"}">${RS(ganho)} com as negociações</div></div>
+    + `<div class="tot"><div class="eyebrow">Total (${REAL ? "real" : "virtual"})</div><div class="v">${R(tot)}</div><div class="v2 ${ganho>=0?"good":"bad"}">${RS(ganho)} com as negociações</div></div>
     <div class="tot" style="display:flex;align-items:center"><button id="btnRebal" title="Simula transferir reais por Pix para deixar o mesmo valor em cada corretora conectada" ${emExecucao || !cs.length ? "disabled" : ""}>Redistribuir reais</button></div>`;
   renderConexoes();
 }
 function renderConexoes(){
   $("#conx").innerHTML = `<span class="eyebrow">Corretoras no sistema</span>` + Object.keys(EX).map(c => {
-    const on = cfg.corretoras.includes(c), erro = dados && dados.erros[c], ok = dados && dados.cotacoes[c];
+    const on = REAL && servidor && servidor.conectadas ? servidor.conectadas.includes(c) : cfg.corretoras.includes(c), erro = dados && dados.erros[c], ok = dados && dados.cotacoes[c];
     return `<button class="cx ${on ? "" : "off"}" data-saldo="${c}" title="${on ? (erro ? esc("Sem resposta: " + erro) : "Conectada") : "Desconectada"} · clique para colocar saldo">
       ${logo(c)}${nome(c)}<span class="d ${on ? (ok ? "ok" : erro ? "err" : "") : ""}"></span><span class="mais">+ saldo</span></button>`;
   }).join("");
@@ -731,6 +746,7 @@ function renderConexoes(){
 let saldoDe = null;
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-saldo]"); if(!b) return;
+  if(REAL){ toast("No modo real, os saldos são os da sua conta. Para colocar dinheiro: Pix na Binance. Corretoras apagadas ainda não estão conectadas ao robô.", "acc"); return; }
   if(servidor){ toast("Os saldos agora são do robô 24h. Para mudar, me peça no chat.", "acc"); return; }
   if(emExecucao){ toast("Espere a operação em andamento terminar para mexer nos saldos.", "acc"); return; }
   saldoDe = b.dataset.saldo;
@@ -845,10 +861,10 @@ function renderOps(){
   const mostrar = ($("#opFiltro").value === "viaveis" ? viaveis : lista).slice(0, 24);
   $("#ops").innerHTML = mostrar.length ? mostrar.map(r => {
     const m = motivoInviavel(r);
-    const sal = m && (m.includes("saldo") || m.includes("falta"));
+    const sal = m && (m.includes("saldo") || m.includes("falta")), nc = m && m.includes("não conectada");
     const custo = (r.taxaA + r.saque)*r.medioCompra + r.taxaB;
     return `<div class="card op ${m ? "" : "viavel"}">
-      <div class="row" style="justify-content:space-between"><span class="eyebrow">${tipoRota(r)}</span><span class="st ${m ? (sal ? "sal" : "no") : "ok"}">${m ? (sal ? "sem saldo" : "não compensa") : "viável"}</span></div>
+      <div class="row" style="justify-content:space-between"><span class="eyebrow">${tipoRota(r)}</span><span class="st ${m ? (nc ? "nc" : sal ? "sal" : "no") : "ok"}">${m ? (nc ? "não conectada" : sal ? "sem saldo" : "não compensa") : "viável"}</span></div>
       <div class="opm">
         <span class="stk">${logo(r.a)}${isDex(r.b) || isDex(r.a) ? kyber : ""}${logo(r.b)}</span>
         <div class="opn"><b>${nome(r.a)} → ${nome(r.b)}</b><small>${viaRota(r)}</small></div>
@@ -856,7 +872,7 @@ function renderOps(){
       </div>
       <div class="spr">diferença ${pct(r.bruto, 4)} <span class="faint">·</span> taxas ${pct(r.bruto - r.pct, 4)}</div>
       <div class="why">${m ? esc(m) : `compra ${P4(r.medioCompra)} · venda ${P4(r.medioVenda)} · custos ${R(custo)} · com ${R(r.valor)}`}</div>
-      <button class="go" data-exec="${r.a}|${r.b}" ${emExecucao || (servidor && m) ? "disabled" : ""}>${servidor && m ? "Aguardando lucro" : "⚡ Executar"}</button>
+      <button class="go" data-exec="${r.a}|${r.b}" ${emExecucao || (servidor && m) ? "disabled" : ""}>${servidor && m ? (nc ? "Conectar corretora" : "Aguardando lucro") : REAL ? "⚡ Executar (real)" : "⚡ Executar"}</button>
     </div>`;
   }).join("") : `<div class="empty">Sem rotas para mostrar. ${dados ? "Ative pelo menos duas corretoras em Configurações." : "Lendo preços…"}</div>`;
 }
@@ -1045,7 +1061,7 @@ async function executar(a, b, valor, eAuto, retomar){
       <div class="kv"><span>Resultado</span><span class="${op.lucro >= 0 ? "good" : "bad"}">${RS(op.lucro)} (${pct(op.pct)})</span></div></div>`;
     $("#mExecEy").textContent = "Concluída"; $("#mExecT").textContent = "operação concluída"; $("#mExecMin").textContent = "fechar";
     toast(`${op.auto ? "Robô: " : ""}${nome(op.a)} → ${nome(op.b)} concluída: ${RS(op.lucro)}`, op.lucro >= 0 ? "" : "bad");
-    notificar("Operação concluída (simulação)", `${nome(op.a)} → ${nome(op.b)}: ${RS(op.lucro)} (${pct(op.pct)})`);
+    notificar(REAL ? "Operação REAL concluída" : "Operação concluída (simulação)", `${nome(op.a)} → ${nome(op.b)}: ${RS(op.lucro)} (${pct(op.pct)})`);
     registrarLog(`${op.auto ? "Robô concluiu" : "Operação manual concluída"}: ${nome(op.a)} → ${nome(op.b)} · ${RS(op.lucro)} (${pct(op.pct)})`, op.lucro >= 0 ? "good" : "bad");
     return true;
   }catch(err){
@@ -1325,25 +1341,47 @@ setInterval(() => { $("#relogio").textContent = new Date().toLocaleTimeString("p
 
 // ============================================================ robô 24h no servidor
 // O robô roda no GitHub Actions a cada 5 min e grava saldos, histórico e atividade neste arquivo.
-const SRV_URL = "/api/estado";
+// No modo real, tudo isso passa a ler o robô real (servidor com IP fixo), protegido pelo PIN.
+const SRV_URL = REAL ? "/api/real?p=painel" : "/api/estado";
+const hdrReal = () => ({"Content-Type":"application/json", "x-pin": PIN_REAL});
+function trocarModo(paraReal){
+  if(paraReal){
+    if(!confirm("Operar em MODO REAL?\n\nO painel passa a mostrar seus saldos de verdade e o botão Executar usa o seu dinheiro.\nSó ficam liberadas as corretoras conectadas ao robô.")) return;
+    if(!PIN_REAL){ const p = prompt("Digite o PIN do robô (o mesmo da página Robô real):"); if(!p) return; PIN_REAL = p.trim(); try{ localStorage.setItem("roboPin", PIN_REAL); }catch(e){} }
+  }
+  gravar("mesa_real", !!paraReal); location.reload();
+}
+document.addEventListener("click", e => {
+  if(e.target.closest("#modoBtn, #modoBtnM")){ e.preventDefault(); trocarModo(!REAL); }
+  if(e.target.closest("[data-modo-sim]")) trocarModo(false);
+});
+if(REAL){
+  document.documentElement.classList.add("real");
+  $("#modoBtn").textContent = "● Modo real"; $("#modoBtnM").firstChild.textContent = "Voltar ao simulador ";
+  $("#saud").parentElement.querySelector(".sub").textContent = "USDT/BRL entre corretoras · preços reais ao vivo · DINHEIRO REAL";
+}
 let servidor = null, roboLigado = null, roboAlterando = false;
 async function lerInterruptor(){
   try{ const r = await fetch("/api/robo?_=" + Date.now(), {cache:"no-store"}); if(r.ok){ const d = await r.json(); if(!roboAlterando) roboLigado = d.ligado !== false; } }catch(e){}
 }
 async function mudarInterruptor(){
   if(roboLigado === null || roboAlterando) return;
-  const novo = !roboLigado; roboAlterando = true; roboLigado = novo; renderServidor();
+  const novo = !roboLigado;
+  if(REAL && novo && !confirm("Ligar o robô AUTOMÁTICO com dinheiro real?\n\nEle vai operar sozinho sempre que aparecer lucro acima do mínimo.")) return;
+  roboAlterando = true; roboLigado = novo; renderServidor();
   try{
-    const r = await fetch("/api/robo", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ligado: novo})});
+    const r = REAL ? await fetch("/api/real?p=config", {method:"POST", headers: hdrReal(), body: JSON.stringify(novo ? {ligado: true, modo: "real"} : {modo: "observar"})})
+      : await fetch("/api/robo", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ligado: novo})});
     const d = await r.json(); if(!r.ok) throw new Error(d.erro || "erro");
-    toast(novo ? "Robô ligado. Ele volta a procurar oportunidades na próxima rodada (em até 5 minutos)." : "Robô desligado. Não compra mais nada; se houver USDT a caminho, termina a venda sem prejuízo.", novo ? "" : "acc");
+    toast(novo ? (REAL ? "Robô REAL ligado: opera sozinho quando houver lucro acima do mínimo." : "Robô ligado. Ele volta a procurar oportunidades na próxima rodada (em até 5 minutos).") : "Robô desligado. Não compra mais nada; se houver USDT a caminho, termina a venda sem prejuízo.", novo ? "" : "acc");
   }catch(e){ roboLigado = !novo; toast("Não consegui mudar o robô: " + e.message, "bad"); }
   roboAlterando = false; renderServidor();
 }
 document.addEventListener("click", e => { if(e.target.closest("#srvTg")) mudarInterruptor(); });
 async function lerServidor(){
   try{
-    const r = await fetch(SRV_URL + "?t=" + Date.now(), {cache:"no-store"});
+    const r = await fetch(SRV_URL + (SRV_URL.includes("?") ? "&" : "?") + "t=" + Date.now(), {cache:"no-store", headers: REAL ? hdrReal() : {}});
+    if(REAL && (r.status === 401 || r.status === 403)){ try{ localStorage.removeItem("roboPin"); }catch(e){} gravar("mesa_real", false); alert("PIN do robô incorreto. Voltando ao simulador."); location.reload(); return; }
     if(!r.ok) throw new Error("estado " + r.status);
     servidor = await r.json();
     if(servidor.erro || !servidor.saldos) throw new Error(servidor.erro || "estado vazio");
@@ -1351,13 +1389,14 @@ async function lerServidor(){
     sim = { saldos: servidor.saldos, hist: servidor.hist || [], log: servidor.log || [], aportes: servidor.aportes || 0, criado: servidor.criado };
     for(const c of Object.keys(EX)) if(!sim.saldos[c]) sim.saldos[c] = {brl:0, usdt:0};
     document.documentElement.classList.add("servidor");
+    if(REAL) cfg.corretoras = [...new Set([...cfg.corretoras, ...(servidor.conectadas || [])])];
     auto.on = false;
     if(servidor.config && servidor.config.max){ cfg.valor = servidor.config.max; $("#opValor").value = cfg.valor; }
     renderStrip(); renderServidor();
     if(dados){ rotas = calcularRotas(+cfg.valor); renderCotacoes(); renderOps(); }
     const p = paginaAtual();
     if(p === "performance") renderPerformance(); if(p === "historico") renderHistorico(); if(p === "impostos") renderImpostos();
-  }catch(e){ /* sem estado do servidor: continua no modo local */ }
+  }catch(e){ if(REAL){ $("#botTxt").textContent = "robô real sem resposta"; $("#botDot").classList.remove("on"); } /* sem estado do servidor: continua no modo local */ }
 }
 function renderServidor(){
   if(!servidor) return;
@@ -1369,7 +1408,7 @@ function renderServidor(){
   $("#botTxt").textContent = !lig ? "robô desligado" : vivo ? `robô 24h · ${min <= 0 ? "agora" : "há " + min + " min"}` : "robô 24h · aguardando";
   const hoje = new Date().toDateString(), hh = servidor.hist.filter(h => new Date(h.t).toDateString() === hoje);
   $("#srvBox").hidden = false;
-  $("#srvBox").innerHTML = `<div class="row" style="justify-content:space-between;margin-bottom:12px"><div><div class="eyebrow" style="color:var(--good)">Robô 24h no servidor</div>
+  $("#srvBox").innerHTML = `<div class="row" style="justify-content:space-between;margin-bottom:12px"><div><div class="eyebrow" style="color:${REAL ? "var(--bad)" : "var(--good)"}">${REAL ? "Robô REAL 24h · dinheiro de verdade" : "Robô 24h no servidor"}</div>
       <div style="font-size:20px;font-weight:600">${lig ? "operando sozinho, mesmo com a página fechada" : "desligado: não faz novas operações"}</div>
       <div class="muted" style="font-size:13px">Só compra com lucro previsto de pelo menos ${nf(c.minimo, 2)}% já com todas as taxas, até ${R(c.max)} por vez. Nunca vende no prejuízo: se o preço piorar no caminho, segura o USDT e espera.</div></div>
       <div class="row" style="flex:none"><span class="eyebrow ${lig ? "good" : ""}">${roboLigado === null ? "…" : lig ? (vivo ? "ligado" : "ligado · aguardando rodada") : "desligado"}</span>
@@ -1378,9 +1417,9 @@ function renderServidor(){
       <div><span class="eyebrow">Última verificação</span><b>${verif ? hora(verif) : "—"}</b></div>
       <div><span class="eyebrow">Lucro hoje</span><b class="${hh.reduce((t,h)=>t+h.lucro,0) >= 0 ? "good" : "bad"}">${RS(hh.reduce((t,h)=>t+h.lucro,0))}</b></div>
       <div><span class="eyebrow">Operações hoje</span><b>${hh.length}</b></div>
-      <div><span class="eyebrow">Agora</span><b style="font-size:13px;font-family:var(--sans)">${p ? (p.segurandoDesde ? `segurando USDT na ${nome(p.b)} até vender sem prejuízo` : `USDT a caminho da ${nome(p.b)}`) : lig ? "procurando oportunidade" : "parado (desligado)"}</b></div>
+      <div><span class="eyebrow">Agora</span><b style="font-size:13px;font-family:var(--sans)">${p ? (REAL && p.rotulo ? esc(p.segurandoMsg || p.rotulo) : p.segurandoDesde ? `segurando USDT na ${nome(p.b)} até vender sem prejuízo` : `USDT a caminho da ${nome(p.b)}`) : lig ? "procurando oportunidade" : REAL ? "automático desligado · Executar manual liberado" : "parado (desligado)"}</b></div>
     </div>
-    <div class="faint" style="font-size:12px;margin-top:10px">A página atualiza estes números sozinha a cada minuto. Para mudar mínimo, valor ou saldos do robô 24h, é só me pedir no chat.</div>`;
+    <div class="faint" style="font-size:12px;margin-top:10px">${REAL ? `Corretoras conectadas: ${(servidor.conectadas || []).map(nome).join(" e ")}. Para mudar mínimo e valor máximo, use a página <a href="/real.html">Robô real</a>. Gás na carteira: ${nf(servidor.pol || 0, 2)} POL.` : "A página atualiza estes números sozinha a cada minuto. Para mudar mínimo, valor ou saldos do robô 24h, é só me pedir no chat."}</div>`;
 }
 
 // ---------- execução manual no servidor (um clique)
@@ -1396,7 +1435,7 @@ async function executarServidor(a, b, valor){
   $("#mExec").hidden = false;
   desenharSrv();
   try{
-    const r = await fetch("/api/executar", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({a, b, valor})});
+    const r = await fetch(REAL ? "/api/real?p=executar" : "/api/executar", {method:"POST", headers: REAL ? hdrReal() : {"Content-Type":"application/json"}, body: JSON.stringify({a, b, valor})});
     const d = await r.json();
     if(!d.ok) throw new Error(d.erro || "não executou");
     opSrv.id = null; opSrv.valor = d.rota.valor; opSrv.chegaEm = d.rota.chegaEm; opSrv.previsto = d.rota.lucro;
@@ -1412,7 +1451,7 @@ async function executarServidor(a, b, valor){
     opSrv = null; emExecucao = null; renderOps(); if(dados) renderCotacoes();
   }
 }
-const PASSOS_S = [["preparar","Operação criada."],["verificar preços","Lendo os livros de ofertas e conferindo o lucro com taxas…"],["levar os reais","Juntando os reais na corretora de compra (Pix simulado)…"],["comprar cripto","Comprando USDT…"],["saque","Enviando o USDT…"],["aguardar depósito",""],["vender cripto",""],["concluído",""]];
+const PASSOS_S = [["preparar","Operação criada."],["verificar preços","Lendo os livros de ofertas e conferindo o lucro com taxas…"],["levar os reais", REAL ? "Conferindo o saldo na corretora de compra…" : "Juntando os reais na corretora de compra (Pix simulado)…"],["comprar cripto","Comprando USDT…"],["saque","Enviando o USDT…"],["aguardar depósito",""],["vender cripto",""],["concluído",""]];
 function desenharSrv(falhou){
   const o = opSrv; if(!o) return;
   $("#mExecSteps").innerHTML = PASSOS_S.map(([t, d], i) => {
@@ -1432,7 +1471,7 @@ async function acompanharSrv(){
     const falta = Math.ceil((o.chegaEm - Date.now())/1000);
     if(falta > 0){ o.etapa = 5; o.desc[5] = `Aguardando confirmação na ${nome(o.b)}… ${falta}s`; desenharSrv(); await dorme(1000); continue; }
     o.etapa = 6; o.desc[5] = "USDT chegou."; desenharSrv();
-    try{ await fetch("/api/tick", {cache:"no-store"}); }catch(e){}
+    if(!REAL){ try{ await fetch("/api/tick", {cache:"no-store"}); }catch(e){} }
     await lerServidor();
     const h = servidor && servidor.hist.find(x => x.id === o.id);
     if(h){
@@ -1449,7 +1488,8 @@ async function acompanharSrv(){
     if(pp && pp.segurandoDesde){
       o.desc[6] = `O preço piorou. Segurando o USDT na ${nome(o.b)} para não vender no prejuízo; vende assim que der. Pode fechar esta janela: o servidor continua cuidando.`;
       desenharSrv(); $("#mExecEy").textContent = "Segurando";
-    } else { o.desc[6] = `Vendendo na ${nome(o.b)}…`; desenharSrv(); }
+    } else if(REAL && pp && pp.rotulo){ o.desc[o.etapa] = pp.rotulo + "…"; desenharSrv(); }
+    else { o.desc[6] = `Vendendo na ${nome(o.b)}…`; desenharSrv(); }
     await dorme(5000);
   }
   clearInterval(relogio);
@@ -1465,7 +1505,7 @@ saudacao(); irPara(); renderStrip();
 ler_precos(); setInterval(ler_precos, POLL_MS);
 lerServidor(); setInterval(lerServidor, 15000); setInterval(renderServidor, 15000);
 // com a página aberta, ela também faz o robô checar (além do GitHub a cada 5 min)
-setInterval(() => { if(servidor && !document.hidden) fetch("/api/tick", {cache:"no-store"}).catch(() => {}); }, 20000);
+setInterval(() => { if(servidor && !REAL && !document.hidden) fetch("/api/tick", {cache:"no-store"}).catch(() => {}); }, 20000);
 setTimeout(() => { if(!servidor) retomarPendente(); }, 3000);
 </script>
 </body>
