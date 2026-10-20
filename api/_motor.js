@@ -85,6 +85,18 @@ function migrar(e) {
     e.taxasVersao = 6;
     log(e, "Simulador igual ao real: o dinheiro só sai da corretora onde está (sem Pix grátis). A volta para a Binance usa o lucro da ida para pagar o custo, e o ciclo nunca fica negativo.", "acc");
   }
+  if ((e.taxasVersao || 0) < 7) {
+    // 20/10 11:00: recomeçar do zero com as regras iguais às do real
+    const h = e.hist || [], soma = h.reduce((t, x) => t + (x.lucro || 0), 0);
+    e.rodadasAnteriores = e.rodadasAnteriores || [];
+    e.rodadasAnteriores.push({ fim: Date.now(), aportes: e.aportes, operacoes: h.length, lucro: soma, pendente: e.pendentes || null, hist: h, saldos: e.saldos });
+    for (const c of Object.keys(e.saldos)) e.saldos[c] = { brl: 0, usdt: 0 };
+    e.saldos.binance = { brl: 5000, usdt: 0 };
+    e.aportes = 5000; e.hist = []; e.pendentes = []; e.pendente = null; e.ultimaOp = 0; e.credito = 0;
+    e.config.max = 5000; e.config.minimo = 0.02; e.ligado = false; e.criado = Date.now();
+    e.taxasVersao = 7;
+    e.log = [{ t: Date.now(), txt: "Simulação zerada: R$ 5.000 na Binance, regras iguais às do real (sem Pix grátis; volta para a Binance com custo real), uma operação por vez, automático desligado.", tipo: "good" }];
+  }
 }
 const MAX_SIMULTANEAS = 1; // uma operação por vez (pedido do usuário em 20/10)
 // várias operações ao mesmo tempo; "pendente" continua existindo (a mais antiga) para o painel
