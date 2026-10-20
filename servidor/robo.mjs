@@ -51,7 +51,8 @@ function lerEnv() {
 let ENV = lerEnv();
 const CARTEIRA = new ethers.Wallet(fs.readFileSync(`${CONF}/carteira.key`, "utf8").trim());
 
-const CONFIG_PADRAO = { max: 200, minimo: 0.02, minValor: 20, intervaloSeg: 15, pausaEntreOpsSeg: 60 };
+// autoPicnic: no fim de cada operação, o BRLA da carteira do robô vai sozinho para a Picnic (o dinheiro fica sempre na Binance ou na Picnic)
+const CONFIG_PADRAO = { max: 200, minimo: 0.02, minValor: 20, intervaloSeg: 15, pausaEntreOpsSeg: 60, autoPicnic: true };
 const PADRAO = { ligado: false, modo: "observar", config: CONFIG_PADRAO, op: null, hist: [], simulados: [], log: [], aval: null, saldos: null, fimUltimaOp: 0, radar: null, radarStats: {}, radarDesde: 0 };
 fs.mkdirSync(DADOS, { recursive: true });
 let E;
@@ -328,7 +329,7 @@ async function avaliar() {
     const real = Math.floor(Math.min(cfg.max, saldoRota(tipo)) * 100) / 100;
     const v = real >= cfg.minValor ? real : cfg.max;
     const r = await calcRota(tipo, v, L, fee, N).catch(() => null);
-    if (r) out[tipo] = { ...r, hipotetico: real < cfg.minValor };
+    if (r) out[tipo] = { ...r, hipotetico: real < cfg.minValor || (tipo === "B" && cfg.autoPicnic) };
   }
   return out;
 }
@@ -365,6 +366,7 @@ function finalizar(op, recebido, extra = {}) {
   };
   E.hist.unshift(h); E.hist = E.hist.slice(0, 500);
   E.op = null; E.fimUltimaOp = agora();
+  if (E.config.autoPicnic) E.enviarPicnic = true;
   log(`Operação ${op.tipo === "A" ? "Binance → Carteira" : "Carteira → Binance"} concluída: entrou R$ ${h.entrou}, saiu R$ ${h.saiu}, lucro R$ ${h.lucro} (${h.pct}%)`, lucro >= 0 ? "lucro" : "aviso");
 }
 
@@ -626,6 +628,13 @@ async function ciclo() {
   ENV = lerEnv();
   try { await rodarRadar(); } catch (e) { console.log("radar:", msg(e)); }
   await atualizarSaldos();
+  // o BRLA que sobrou na carteira do robô vai para a Picnic
+  if (!E.op && E.config.autoPicnic && (E.enviarPicnic || (E.saldos?.carteira?.BRLA ?? 0) >= 1)) {
+    if ((E.saldos?.carteira?.BRLA ?? 0) >= 1) {
+      try { await sacarPicnic(); E.enviarPicnic = false; }
+      catch (e) { log("Não consegui mandar o BRLA para a Picnic: " + msg(e) + " (tento de novo)", "erro"); }
+    } else E.enviarPicnic = false;
+  }
   if (E.op) {
     await avancar(E.op); // operação em andamento sempre vai até o fim (sem prejuízo); desligar só impede de começar outra
     return;
@@ -834,6 +843,7 @@ http.createServer(async (req, res) => {
       const num = (v, a, z) => { const x = Number(v); return Number.isFinite(x) && x >= a && x <= z ? x : null; };
       const mx = num(b.max, 20, 100000); if (mx != null && mx !== E.config.max) { E.config.max = mx; mud.push(`valor máximo R$ ${mx}`); }
       const mn = num(b.minimo, 0, 5); if (mn != null && mn !== E.config.minimo) { E.config.minimo = mn; mud.push(`lucro mínimo ${mn}%`); }
+    if (typeof b.autoPicnic === "boolean" && b.autoPicnic !== E.config.autoPicnic) { E.config.autoPicnic = b.autoPicnic; mud.push(b.autoPicnic ? "mandar o BRLA para a Picnic no fim de cada operação" : "deixar o BRLA na carteira do robô"); }
       if (mud.length) log("Painel: " + mud.join(", "), "op");
       salvar();
       return enviar(200, publico());
