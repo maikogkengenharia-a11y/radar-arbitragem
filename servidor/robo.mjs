@@ -52,14 +52,14 @@ let ENV = lerEnv();
 const CARTEIRA = new ethers.Wallet(fs.readFileSync(`${CONF}/carteira.key`, "utf8").trim());
 
 // autoPicnic: no fim de cada operação, o BRLA da carteira do robô vai sozinho para a Picnic (o dinheiro fica sempre na Binance ou na Picnic)
-const CONFIG_PADRAO = { max: 200, minimo: 0.02, minValor: 20, intervaloSeg: 15, pausaEntreOpsSeg: 60, autoPicnic: true };
+const CONFIG_PADRAO = { max: 200, minimo: 0.02, minValor: 20, intervaloSeg: 15, pausaEntreOpsSeg: 60, autoPicnic: false };
 const PADRAO = { ligado: false, modo: "observar", config: CONFIG_PADRAO, op: null, hist: [], simulados: [], log: [], aval: null, saldos: null, fimUltimaOp: 0, radar: null, radarStats: {}, radarDesde: 0 };
 fs.mkdirSync(DADOS, { recursive: true });
 let E;
 try { E = { ...structuredClone(PADRAO), ...JSON.parse(fs.readFileSync(ARQ, "utf8")) }; }
 catch { E = structuredClone(PADRAO); }
 E.config = { ...CONFIG_PADRAO, ...E.config };
-if ((E.configVersao || 0) < 2) { E.config.autoPicnic = true; E.configVersao = 2; } // 20/10: nada fica parado na carteira do robô
+if ((E.configVersao || 0) < 3) { E.config.autoPicnic = false; E.configVersao = 3; } // 20/10: o dinheiro sempre volta sozinho para a Binance
 
 function salvar() {
   E.atualizado = agora();
@@ -327,7 +327,7 @@ async function avaliar() {
   const cfg = E.config;
   const out = { t: agora(), taxa: fee, saque: N.taxa, ask: L.asks[0]?.[0], bid: L.bids[0]?.[0] };
   for (const tipo of ["A", "B"]) {
-    const real = Math.floor(Math.min(cfg.max, saldoRota(tipo)) * 100) / 100;
+    const real = Math.floor((tipo === "B" ? saldoRota(tipo) : Math.min(cfg.max, saldoRota(tipo))) * 100) / 100;
     const v = real >= cfg.minValor ? real : cfg.max;
     const r = await calcRota(tipo, v, L, fee, N).catch(() => null);
     if (r) out[tipo] = { ...r, hipotetico: real < cfg.minValor || (tipo === "B" && cfg.autoPicnic) };
@@ -359,10 +359,13 @@ function segurando(op, texto) {
 
 function finalizar(op, recebido, extra = {}) {
   const lucro = recebido - op.custo;
+  // "crédito" = lucro da ida que ainda pode pagar a volta (o ciclo Binance → … → Binance nunca fica negativo)
+  if (op.tipo === "A") E.credito = r2((E.credito || 0) + Math.max(0, lucro));
+  else E.credito = r2(Math.max(0, (E.credito || 0) + lucro));
   const h = {
     id: op.id, tipo: op.tipo, t: agora(), inicio: op.inicio, duracaoSeg: Math.round((agora() - op.inicio) / 1000),
     entrou: r2(op.custo), saiu: r2(recebido), lucro: r2(lucro), pct: +((lucro / op.custo) * 100).toFixed(3),
-    previsto: op.previsto, gasPol: +(op.gasPol || 0).toFixed(4), manual: !!op.manual,
+    previsto: op.previsto, gasPol: +(op.gasPol || 0).toFixed(4), manual: !!op.manual, retorno: !!op.retorno,
     usdt: +(op.tipo === "A" ? op.usdtChegou || op.usdtComprado || 0 : op.usdt || 0).toFixed(4), ...extra,
   };
   E.hist.unshift(h); E.hist = E.hist.slice(0, 500);
@@ -482,7 +485,7 @@ async function avancar(op) {
       const rota = await kyRota(BRLA, USDT, wei);
       const s = vender(L.bids, rota.saida);
       const brl = s ? s.brl * (1 - fee) : 0;
-      const precisa = op.custo + GAS_BRL * 2;
+      const precisa = op.custo + GAS_BRL * 2 - (op.credito || 0);
       if (brl < precisa) { log("A oportunidade sumiu antes de começar; operação cancelada (nada foi gasto)", "aviso"); E.op = null; E.fimUltimaOp = agora(); return; }
       const minUsdt = rota.saida * (precisa / brl);
       const h = await iniciarTroca(op, BRLA, USDT, wei, minUsdt);
@@ -544,7 +547,7 @@ async function avancar(op) {
       if (!o) {
         const livre = (await saldosBinance()).USDT;
         const qtd = baixo(Math.min(op.usdtBinance, livre), R.passo);
-        const falta = op.custo - op.brlAcum;
+        const falta = op.custo - (op.credito || 0) - op.brlAcum; // na volta, o crédito do ciclo cobre parte do custo
         const L = await livro();
         const melhor = L.bids[0]?.[0] || 0;
         if (qtd < R.minQtd || qtd * melhor < R.minNocional) { // sobra pequena demais para a Binance aceitar
@@ -606,6 +609,7 @@ function novaOp(tipo, a) {
     id, tipo, inicio: agora(), etapaEm: agora(),
     etapa: tipo === "A" ? "comprar" : "trocarB",
     valor: a.valor, custo: a.valor, previsto: { lucro: r2(a.lucro), pct: +a.pct.toFixed(3) }, manual: !!a.manual,
+    credito: a.retorno ? Math.min(a.credito || 0, Math.max(0, -a.lucro) + GAS_BRL * 2) : 0, retorno: !!a.retorno,
   };
 }
 
@@ -642,9 +646,14 @@ async function ciclo() {
   }
   E.aval = await avaliar();
   const cfg = E.config;
+  const credito = E.credito || 0, temBrla = (E.saldos?.carteira?.BRLA ?? 0) >= cfg.minValor;
   const cands = ["A", "B"].map(k => E.aval[k] && { tipo: k, ...E.aval[k] })
-    .filter(a => a && (!a.hipotetico || E.modo === "observar") && a.lucro > 0 && a.pct >= cfg.minimo)
-    .sort((x, y) => y.pct - x.pct);
+    .filter(a => a && (!a.hipotetico || E.modo === "observar") && (
+      (a.lucro > 0 && a.pct >= cfg.minimo) ||
+      // volta para a Binance: vale assim que o ciclo completo (ida + volta) não ficar negativo
+      (a.tipo === "B" && temBrla && a.lucro + credito >= 0)))
+    .map(a => a.tipo === "B" && !(a.lucro > 0 && a.pct >= cfg.minimo) ? { ...a, retorno: true, credito } : a)
+    .sort((x, y) => (y.tipo === "B" && temBrla) - (x.tipo === "B" && temBrla) || y.pct - x.pct); // trazer o dinheiro de volta tem prioridade
   const melhor = cands[0];
   if (!E.ligado || !melhor) return;
 
@@ -663,7 +672,9 @@ async function ciclo() {
   if (agora() - (E.fimUltimaOp || 0) < cfg.pausaEntreOpsSeg * 1000) return;
   if (E.op) return;
   E.op = novaOp(melhor.tipo, melhor);
-  log(`Iniciando ${melhor.tipo === "A" ? "Binance → Carteira" : "Carteira → Binance"} com R$ ${r2(melhor.valor)} (lucro previsto R$ ${r2(melhor.lucro)}, ${melhor.pct.toFixed(3)}%)`, "op");
+  log(melhor.retorno
+    ? `Trazendo o dinheiro de volta para a Binance: R$ ${r2(melhor.valor)} (a volta custa R$ ${r2(-melhor.lucro)}, coberto pelo lucro da ida; o ciclo completo fica no zero ou positivo)`
+    : `Iniciando ${melhor.tipo === "A" ? "Binance → Carteira" : "Carteira → Binance"} com R$ ${r2(melhor.valor)} (lucro previsto R$ ${r2(melhor.lucro)}, ${melhor.pct.toFixed(3)}%)`, "op");
   salvar();
   await avancar(E.op);
 }
@@ -703,7 +714,7 @@ function painel() {
   const hist = E.hist.map(h => {
     const [a, b] = ROTA_DE[h.tipo], u = h.usdt || 0;
     return { id: h.id, t: h.t, a, b, valor: h.entrou, final: h.saiu, lucro: h.lucro, pct: h.pct, previsto: h.previsto?.lucro,
-      usdt: u, compra: u ? h.entrou / u : 0, venda: u ? h.saiu / u : 0, taxas: 0, auto: !h.manual, modo: "real", duracao: h.duracaoSeg };
+      usdt: u, compra: u ? h.entrou / u : 0, venda: u ? h.saiu / u : 0, taxas: 0, auto: !h.manual, modo: "real", duracao: h.duracaoSeg, retorno: !!h.retorno };
   });
   const soma = hist.reduce((t, h) => t + h.lucro, 0);
   let pendente = null;
@@ -718,7 +729,7 @@ function painel() {
   }
   return {
     real: true, ligado: E.ligado && E.modo === "real", modo: E.modo, verificado: E.saldos?.t, atualizado: E.atualizado,
-    config: { minimo: E.config.minimo, max: E.config.max }, conectadas: ENV.BINANCE_KEY ? ["binance", "polygon"] : ["polygon"],
+    config: { minimo: E.config.minimo, max: E.config.max }, credito: E.credito || 0, conectadas: ENV.BINANCE_KEY ? ["binance", "polygon"] : ["polygon"],
     saldos: { binance: { brl: sb.BRL, usdt: sb.USDT }, polygon: { brl: sc.BRLA, usdt: sc.USDT } },
     aportes: total - soma, hist, log: E.log.map(l => ({ t: l.t, txt: l.msg, tipo: TIPO_LOG[l.tipo] ?? "" })),
     pendente, carteira: CARTEIRA.address, pol: sc.POL ?? 0, criado: E.radarDesde || agora(),
