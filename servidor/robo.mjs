@@ -52,14 +52,14 @@ let ENV = lerEnv();
 const CARTEIRA = new ethers.Wallet(fs.readFileSync(`${CONF}/carteira.key`, "utf8").trim());
 
 // autoPicnic: no fim de cada operação, o BRLA da carteira do robô vai sozinho para a Picnic (o dinheiro fica sempre na Binance ou na Picnic)
-const CONFIG_PADRAO = { max: 200, minimo: 0.02, minValor: 20, intervaloSeg: 15, pausaEntreOpsSeg: 60, autoPicnic: false };
+const CONFIG_PADRAO = { max: 200, minimo: 0.02, minValor: 20, intervaloSeg: 15, pausaEntreOpsSeg: 60, autoPicnic: true };
 const PADRAO = { ligado: false, modo: "observar", config: CONFIG_PADRAO, op: null, hist: [], simulados: [], log: [], aval: null, saldos: null, fimUltimaOp: 0, radar: null, radarStats: {}, radarDesde: 0 };
 fs.mkdirSync(DADOS, { recursive: true });
 let E;
 try { E = { ...structuredClone(PADRAO), ...JSON.parse(fs.readFileSync(ARQ, "utf8")) }; }
 catch { E = structuredClone(PADRAO); }
 E.config = { ...CONFIG_PADRAO, ...E.config };
-if (!E.configVersao) { E.config.autoPicnic = false; E.configVersao = 1; }
+if ((E.configVersao || 0) < 2) { E.config.autoPicnic = true; E.configVersao = 2; } // 20/10: nada fica parado na carteira do robô
 
 function salvar() {
   E.atualizado = agora();
