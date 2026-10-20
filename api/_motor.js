@@ -1,11 +1,12 @@
-// Motor da Mesa de Arbitragem (simulação no servidor).
-// O estado (saldos, histórico, atividade, operação em andamento, liga/desliga) fica num arquivo
-// privado no Vercel Blob. Quem mexe nele: /api/tick (robô), /api/executar (botão manual) e /api/robo.
+// Motor da Mesa de Arbitragem (simulação).
+// Roda no servidor do robô (Hostinger), 24h. O estado (saldos, histórico, atividade, operação em andamento,
+// liga/desliga) fica num arquivo do próprio servidor. Antes ficava no Vercel Blob, que tem limite de gravações.
 // Regras: só compra com lucro previsto >= mínimo (já com todas as taxas) e nunca vende no prejuízo.
-import { put, get } from "@vercel/blob";
+import fs from "node:fs";
+import path from "node:path";
 import { BRL, livroBrl } from "./_brl.js";
 
-const ARQ = "robo/estado.json";
+const ARQ = process.env.SIM_ARQ || "/var/lib/robo/simulador.json";
 const SEMENTE = "https://raw.githubusercontent.com/maikogkengenharia-a11y/radar-arbitragem/dados/estado.json";
 
 const nome = c => BRL[c] || c;
@@ -16,11 +17,12 @@ const pct = n => (n >= 0 ? "+" : "") + nf(n, 3) + "%";
 
 // ---------------------------------------------------------------- estado
 export async function lerEstado() {
-  const r = await get(ARQ, { access: "private", useCache: false }).catch(() => null);
-  if (r && r.stream) {
-    const e = JSON.parse(await new Response(r.stream).text());
+  let txt = null;
+  try { txt = fs.readFileSync(ARQ, "utf8"); } catch {}
+  if (txt) {
+    const e = JSON.parse(txt);
     migrar(e); normalizar(e);
-    return { e, etag: r.blob?.etag || r.etag || null };
+    return { e, etag: null };
   }
   // primeira vez: começa do estado inicial guardado no GitHub
   const s = await fetch(SEMENTE, { signal: AbortSignal.timeout(10000) });
@@ -104,28 +106,25 @@ function normalizar(e) {
   if (!Array.isArray(e.pendentes)) e.pendentes = e.pendente ? [e.pendente] : [];
   e.pendente = e.pendentes[0] || null;
 }
-export async function salvarEstado(e, etag) {
+export async function salvarEstado(e) {
   normalizar(e);
   e.atualizado = Date.now();
-  const opts = { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: "application/json", cacheControlMaxAge: 60 };
-  if (etag) opts.ifMatch = etag;
-  await put(ARQ, JSON.stringify(e), opts);
+  fs.mkdirSync(path.dirname(ARQ), { recursive: true });
+  fs.writeFileSync(ARQ + ".tmp", JSON.stringify(e));
+  fs.renameSync(ARQ + ".tmp", ARQ);
 }
 // lê, altera e grava; se outra parte gravou no meio, tenta de novo
-export async function alterar(fn) {
-  for (let i = 0; i < 4; i++) {
-    const { e, etag } = await lerEstado();
+// uma alteração de cada vez (fila), para duas partes nunca gravarem por cima uma da outra
+let fila = Promise.resolve();
+export function alterar(fn) {
+  const vez = fila.then(async () => {
+    const { e } = await lerEstado();
     const out = await fn(e);
-    if (out && out.semGravar) return out;
-    // na última tentativa grava sem a checagem de versão, para nunca travar o robô
-    try { await salvarEstado(e, i < 3 ? etag : null); return out; }
-    catch (err) {
-      const txt = String(err && (err.name + " " + err.message));
-      if (/Precondition|ETag/i.test(txt)) { await new Promise(r => setTimeout(r, 150 + i * 250)); continue; }
-      throw err;
-    }
-  }
-  throw new Error("o estado está ocupado, tente de novo");
+    if (!(out && out.semGravar)) await salvarEstado(e);
+    return out;
+  });
+  fila = vez.catch(() => {});
+  return vez;
 }
 
 function log(e, txt, tipo = "") { e.log = e.log || []; e.log.unshift({ t: Date.now(), txt, tipo }); e.log = e.log.slice(0, 300); }

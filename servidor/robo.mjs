@@ -9,6 +9,7 @@ import http from "node:http";
 import crypto from "node:crypto";
 import { ethers } from "ethers";
 import { radar, NOME } from "./radar.mjs";
+import * as SIM from "../api/_motor.js";
 
 const CONF = process.env.ROBO_CONF || "/etc/robo";
 const DADOS = process.env.ROBO_DADOS || "/var/lib/robo";
@@ -857,6 +858,41 @@ http.createServer(async (req, res) => {
     if (url.pathname === "/api/real") url.pathname = "/" + (url.searchParams.get("p") || "estado");
     if (url.pathname === "/ping") return enviar(200, { ok: true, carteira: CARTEIRA.address, pin: !!ENV.PIN });
     if (url.pathname === "/ranking") return enviar(200, ranking()); // só estatística de mercado, sem saldo: não precisa de PIN
+    // ---------- simulador (dinheiro virtual, não precisa de PIN)
+    if (url.pathname.startsWith("/sim/")) {
+      let b = {};
+      if (req.method === "POST") { let corpo = ""; for await (const p of req) { corpo += p; if (corpo.length > 10000) break; } try { b = JSON.parse(corpo || "{}"); } catch {} }
+      const rota = url.pathname.slice(5);
+      try {
+        if (rota === "estado") return enviar(200, (await SIM.lerEstado()).e);
+        if (rota === "tick") return enviar(200, await SIM.tick());
+        if (rota === "executar" && req.method === "POST") { const r = await SIM.executarManual(b.a, b.b, b.valor); return enviar(r.ok ? 200 : 409, r); }
+        if (rota === "vender" && req.method === "POST") return enviar(200, await SIM.venderAgora(b.id));
+        if (rota === "robo") {
+          if (req.method === "POST") {
+            if (typeof b.ligado !== "boolean") return enviar(400, { erro: "envie { ligado: true ou false }" });
+            return enviar(200, await SIM.alterar(e => {
+              e.ligado = b.ligado; e.log = e.log || [];
+              e.log.unshift({ t: Date.now(), txt: b.ligado ? "Robô ligado pelo painel." : "Robô desligado pelo painel: não faz novas compras (se houver USDT a caminho, termina a venda sem prejuízo).", tipo: b.ligado ? "good" : "warn" });
+              return { ligado: e.ligado, alterado: Date.now() };
+            }));
+          }
+          return enviar(200, { ligado: (await SIM.lerEstado()).e.ligado !== false });
+        }
+        if (rota === "regras" && req.method === "POST") {
+          const num = (v, a, z) => { const x = Number(v); return Number.isFinite(x) && x >= a && x <= z ? x : null; };
+          const minimo = num(b.minimo, 0, 5), max = num(b.max, 50, 1000000);
+          return enviar(200, await SIM.alterar(e => {
+            if (minimo != null) e.config.minimo = minimo;
+            if (max != null) e.config.max = max;
+            if (b.perfil) e.config.perfil = String(b.perfil).slice(0, 20);
+            e.log.unshift({ t: Date.now(), txt: `Regras${b.perfil ? ` (perfil ${b.perfil})` : ""}: lucro mínimo ${e.config.minimo}% e até R$ ${e.config.max} por operação.`, tipo: "acc" });
+            return { ok: true, config: e.config };
+          }));
+        }
+        return enviar(404, { erro: "não encontrado" });
+      } catch (e) { return enviar(200, { ok: false, erro: msg(e) }); }
+    }
     ENV = lerEnv();
     if (!ENV.PIN) return enviar(403, { erro: "PIN ainda não configurado: rode robo-config no servidor" });
     if (!pinOk(req)) return enviar(401, { erro: agora() < bloqueadoAte ? "Muitas tentativas. Espere 10 minutos." : "PIN incorreto" });
@@ -899,3 +935,12 @@ http.createServer(async (req, res) => {
 }).listen(PORTA, () => console.log("painel do robô na porta", PORTA));
 
 loop();
+
+// simulador: uma checagem a cada 15 s, 24h (substitui o GitHub Actions + Vercel Blob)
+let simOcupado = false;
+setInterval(async () => {
+  if (simOcupado) return;
+  simOcupado = true;
+  try { await SIM.tick(); } catch (e) { console.log("simulador:", msg(e)); }
+  simOcupado = false;
+}, 15000);
