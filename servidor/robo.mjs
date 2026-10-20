@@ -27,6 +27,8 @@ const ERC20 = [
   "function approve(address,uint256) returns (bool)",
   "function transfer(address,uint256) returns (bool)",
 ];
+// único destino permitido para saques: a carteira da Picnic do Maiko (BRLA na Polygon, depois Pix grátis)
+const PICNIC = "0xe179c4369bab7A1Cd67562347ee5d35b01DEdE28";
 const GAS_BRL = 0.10;   // folga em reais para o gás de cada transação na Polygon (na prática custa centavos)
 const POL_MINIMO = 0.5; // abaixo disso o robô não começa operação (precisa de POL para pagar o gás)
 
@@ -706,6 +708,28 @@ async function executarManual(a, b, pedido) {
   return { ok: true, rota: { valor, lucro: r2(r.lucro), pct: +r.pct.toFixed(3), chegaEm: agora() + (tipo === "A" ? 4 : 10) * 60e3 } };
 }
 
+// manda BRLA da carteira do robô para a Picnic (só para esse endereço fixo)
+async function sacarPicnic(pedido) {
+  if (E.op) throw new Error("tem uma operação em andamento; espere ela terminar para sacar");
+  const c = await saldosCarteira();
+  if (c.POL < 0.05) throw new Error("a carteira do robô está sem POL para o gás");
+  let wei = c.brlaWei;
+  if (pedido != null && Number(pedido) > 0) {
+    const q = ethers.parseUnits(Number(pedido).toFixed(2), 18);
+    if (q < wei) wei = q;
+  }
+  if (wei < ethers.parseUnits("1", 18)) throw new Error("sem BRLA para sacar na carteira do robô");
+  const t = new ethers.Contract(BRLA, ERC20);
+  const s = await assinar({ to: BRLA, data: t.interface.encodeFunctionData("transfer", [PICNIC, wei]), value: 0n });
+  await transmitir(s.assinada);
+  const valor = r2(+ethers.formatUnits(wei, 18));
+  log(`Saque: ${valor} BRLA enviados para a sua Picnic. Lá é só fazer o Pix (grátis).`, "op");
+  const r = await esperarRecibo(s.hash, 90000);
+  if (r && r.status !== 1) throw new Error("a transferência falhou na rede; nada saiu da carteira");
+  await atualizarSaldos(); salvar();
+  return { ok: true, valor, tx: s.hash, confirmado: !!r };
+}
+
 let erradas = 0, bloqueadoAte = 0;
 function pinOk(req) {
   if (!ENV.PIN || agora() < bloqueadoAte) return false;
@@ -742,6 +766,13 @@ http.createServer(async (req, res) => {
     if (!pinOk(req)) return enviar(401, { erro: agora() < bloqueadoAte ? "Muitas tentativas. Espere 10 minutos." : "PIN incorreto" });
     if (req.method === "GET" && url.pathname === "/estado") return enviar(200, publico());
     if (req.method === "GET" && url.pathname === "/painel") return enviar(200, painel());
+    if (req.method === "POST" && url.pathname === "/sacar") {
+      let corpo = "";
+      for await (const p of req) { corpo += p; if (corpo.length > 10000) break; }
+      const b = JSON.parse(corpo || "{}");
+      try { return enviar(200, await sacarPicnic(b.valor)); }
+      catch (e) { return enviar(200, { ok: false, erro: msg(e) }); }
+    }
     if (req.method === "POST" && url.pathname === "/executar") {
       let corpo = "";
       for await (const p of req) { corpo += p; if (corpo.length > 10000) break; }

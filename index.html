@@ -1381,6 +1381,19 @@ async function mudarInterruptor(){
   roboAlterando = false; renderServidor();
 }
 document.addEventListener("click", e => { if(e.target.closest("#srvTg")) mudarInterruptor(); });
+// sacar o BRLA da carteira do robô para a Picnic (único destino permitido)
+document.addEventListener("click", async e => {
+  const b = e.target.closest("#rSacar"); if(!b) return;
+  const v = sim.saldos.polygon ? sim.saldos.polygon.brl : 0;
+  if(!confirm(`Enviar ${R(v)} em BRLA da carteira do robô para a sua Picnic?\n\nDepois, no app da Picnic: Sacar → Pix (grátis).`)) return;
+  b.disabled = true; b.textContent = "Enviando…";
+  try{
+    const r = await fetch("/api/real?p=sacar", {method:"POST", headers: hdrReal(), body: "{}"});
+    const d = await r.json(); if(!d.ok) throw new Error(d.erro || "não enviou");
+    toast(`${R(d.valor)} em BRLA enviados para a Picnic${d.confirmado ? "" : " (confirmando na rede)"}. Agora é só fazer o Pix no app da Picnic.`);
+    lerServidor();
+  }catch(err){ toast("Não consegui sacar: " + err.message, "bad"); b.disabled = false; b.textContent = "Sacar tudo para a Picnic"; }
+});
 // salvar regras do robô real (valor máximo e lucro mínimo)
 let editandoRegras = false;
 document.addEventListener("focusin", e => { if(e.target.closest("#rMax, #rMin")) editandoRegras = true; });
@@ -1435,7 +1448,7 @@ function renderServidor(){
       <div><span class="eyebrow">Operações hoje</span><b>${hh.length}</b></div>
       <div><span class="eyebrow">Agora</span><b style="font-size:13px;font-family:var(--sans)">${p ? (REAL && p.rotulo ? esc(p.segurandoMsg || p.rotulo) : p.segurandoDesde ? `segurando USDT na ${nome(p.b)} até vender sem prejuízo` : `USDT a caminho da ${nome(p.b)}`) : lig ? "procurando oportunidade" : REAL ? "automático desligado · Executar manual liberado" : "parado (desligado)"}</b></div>
     </div>
-    <div class="faint" style="font-size:12px;margin-top:10px">${REAL ? `<div class="row" style="margin-bottom:8px"><label class="f">Valor máximo por operação (R$)<input id="rMax" type="number" min="20" step="10" value="${c.max}" style="width:150px"></label><label class="f">Lucro mínimo (%)<input id="rMin" type="number" min="0" step="0.01" value="${c.minimo}" style="width:120px"></label><button id="rSalvar" style="align-self:flex-end">Salvar regras</button></div>Corretoras conectadas: ${(servidor.conectadas || []).map(nome).join(" e ")}. Gás na carteira do robô: ${nf(servidor.pol || 0, 2)} POL.` : "A página atualiza estes números sozinha a cada minuto. Para mudar mínimo, valor ou saldos do robô 24h, é só me pedir no chat."}</div>`;
+    <div class="faint" style="font-size:12px;margin-top:10px">${REAL ? `<div class="row" style="margin-bottom:8px"><label class="f">Valor máximo por operação (R$)<input id="rMax" type="number" min="20" step="10" value="${c.max}" style="width:150px"></label><label class="f">Lucro mínimo (%)<input id="rMin" type="number" min="0" step="0.01" value="${c.minimo}" style="width:120px"></label><button id="rSalvar" style="align-self:flex-end">Salvar regras</button></div><div class="row" style="margin-bottom:8px;align-items:center"><span>BRLA na carteira do robô: <b class="num">${R(sim.saldos.polygon ? sim.saldos.polygon.brl : 0)}</b></span><button id="rSacar" ${(sim.saldos.polygon && sim.saldos.polygon.brl >= 1 && !servidor.pendente) ? "" : "disabled"}>Sacar tudo para a Picnic</button><span class="faint">depois é só fazer o Pix no app da Picnic (grátis)</span></div>Corretoras conectadas: ${(servidor.conectadas || []).map(nome).join(" e ")}. Gás na carteira do robô: ${nf(servidor.pol || 0, 2)} POL.` : "A página atualiza estes números sozinha a cada minuto. Para mudar mínimo, valor ou saldos do robô 24h, é só me pedir no chat."}</div>`;
 }
 
 // ---------- execução manual no servidor (um clique)
