@@ -2,5 +2,15 @@
   "regions": ["gru1"],
   "functions": {
     "api/*.js": { "maxDuration": 20 }
-  }
+  },
+  "rewrites": [
+    { "source": "/api/estado", "destination": "/api/sim?r=estado" },
+    { "source": "/api/tick", "destination": "/api/sim?r=tick" },
+    { "source": "/api/executar", "destination": "/api/sim?r=executar" },
+    { "source": "/api/vender", "destination": "/api/sim?r=vender" },
+    { "source": "/api/robo", "destination": "/api/sim?r=robo" },
+    { "source": "/api/regras", "destination": "/api/sim?r=regras" },
+    { "source": "/api/volta", "destination": "/api/sim?r=volta" },
+    { "source": "/api/devolver", "destination": "/api/sim?r=devolver" }
+  ]
 }
