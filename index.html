@@ -687,6 +687,9 @@ const isDex = c => EX[c] && EX[c].tipo === "dex";
 const TAXAS = {binance:0.10,bitget:0.10,bybit:0.10,okx:0.10,kucoin:0.10,mercadobitcoin:0.70,bitso:0.65,novadax:0.50,foxbit:0.50,mexc:0.05,avenia:0.05,chainless:0.05,picnic:0.01,polygon:0.02};
 const SAQUE = {binance:0.03,bitget:0.10,bybit:0.30,okx:0.50,kucoin:1,mercadobitcoin:1,bitso:1,novadax:1,foxbit:1,mexc:0.10,avenia:0.02,chainless:0.02,picnic:0.02,polygon:0.02};
 const REDE = {binance:"Polygon",bitget:"BEP20",bybit:"BEP20",okx:"Polygon",mercadobitcoin:"Polygon",bitso:"TRC20",foxbit:"TRC20"};
+// taxa de saque por Pix (R$) para trazer o dinheiro de volta à Binance (igual ao servidor do simulador)
+const PIX_SAQUE = {mercadobitcoin:2.90, foxbit:0, bitso:0, novadax:1.99, picnic:0, avenia:0, chainless:2.90};
+const custoVolta = b => b === "binance" ? 0 : (PIX_SAQUE[b] ?? 0);
 const POLL_MS = 4000, POR_PAG = 10, MINIMOS = [0.1,0.3,0.5,1,2], INTERVALOS = [1,2,3,5,10];
 
 // ============================================================ estado
@@ -766,7 +769,9 @@ function motivoInviavel(r){
   if(!REAL && (servidor.pendentes || []).length) return "espere a operação em andamento terminar";
   if(sim.saldos[r.a].brl < (REAL ? 20 : 50)) return `sem saldo em reais na ${nome(r.a)}`;
   if(!REAL && r.a !== "binance" && r.b === "binance" && r.lucro + (servidor.credito || 0) >= 0) return "";
-  if(r.lucro <= 0 || r.pct < min) return r.lucro <= 0 ? "daria prejuízo agora" : `abaixo do mínimo de ${nf(min, 2)}%`;
+  if(r.lucro <= 0 || r.pct < min) return r.lucro <= 0 ? "daria prejuízo agora" : `lucro de ${pct(r.pct, 4)} está abaixo do mínimo de ${nf(min, 2)}%`;
+  if(!REAL && r.a === "binance" && custoVolta(r.b) > 0){ const l = r.lucro - custoVolta(r.b);
+    if(l <= 0 || l/r.valor*100 < min) return `a volta por Pix custa ${R(custoVolta(r.b))}: o ciclo daria ${RS(l)}`; }
   return "";
 }
 function calcularRotas(valor){
@@ -1017,9 +1022,9 @@ function renderOps(){
   ["#nOps", "#nOps2"].forEach(s => { $(s).hidden = !viaveis.length; $(s).textContent = viaveis.length; });
   $("#opCount").textContent = `${viaveis.length} de ${base.length} rotas`;
   // mostra as viáveis; depois as que dão lucro mas estão travadas (sem saldo, conexão…); depois as mais perto de dar lucro
-  const resto = base.filter(r => motivoInviavel(r)).sort((x, y) => y.lucro - x.lucro);
+  const resto = base.filter(r => motivoInviavel(r)).sort((x, y) => (sim.saldos[y.a].brl >= 50) - (sim.saldos[x.a].brl >= 50) || y.lucro - x.lucro);
   const mostrar = [...viaveis, ...resto].slice(0, Math.max(12, viaveis.length));
-  $("#ops").innerHTML = (!viaveis.length ? `<div class="banner info" style="grid-column:1/-1">${comLucro.length ? `Há ${comLucro.length} rota(s) com lucro, mas travadas (veja o motivo em cada cartão). ` : "Nenhuma rota dá lucro com todas as taxas neste momento. "}O seu dinheiro está em: <b>${Object.keys(EX).filter(c => sim.saldos[c].brl >= 20).map(nome).join(", ") || "nenhuma corretora"}</b>. Quando uma rota ficar viável, o botão vira ⚡ Executar.</div>` : "")
+  $("#ops").innerHTML = (!viaveis.length ? `<div class="banner info" style="grid-column:1/-1">${comLucro.length ? `Há ${comLucro.length} rota(s) com lucro, mas travadas (veja o motivo em cada cartão). ` : "Nenhuma rota dá lucro com todas as taxas neste momento. "}O seu dinheiro está em: <b>${Object.keys(EX).filter(c => sim.saldos[c].brl >= 20).map(nome).join(", ") || "nenhuma corretora"}</b>.${(() => { const m = base.filter(r => sim.saldos[r.a].brl >= 50 && !r.faltou)[0]; return m ? ` A melhor rota saindo de lá agora é <b>${nome(m.a)} → ${nome(m.b)}</b>: ${esc(motivoInviavel(m) || "")}.` : ""; })()} Quando uma rota ficar viável, o botão vira ⚡ Executar.</div>` : "")
     + mostrar.map(cartaoOp).join("");
 }
 function cartaoOp(r){
@@ -1032,6 +1037,7 @@ function cartaoOp(r){
       <div class="opv"><b class="num ${r.lucro > 0 ? "" : "bad"}">${RS(r.lucro)}</b><span class="${r.lucro > 0 ? "good" : "bad"}">${pct(r.pct, 4)}</span></div></div>
     <div class="mt2"><div><small>SPREAD</small><b class="${r.bruto > 0 ? "good" : "bad"}">${pct(r.bruto, 4)}</b></div><div><small>TAXAS</small><b>${pct(r.bruto - r.pct, 4)}</b></div></div>
     <div class="fino">Trade: <b>${R(r.trade)}</b> · Rede: <b>${R(r.rede)}</b>${isDex(r.b) ? ` · sai como <b>${EX[r.b].token}</b>` : ` → líquido <b>${R(r.final)}</b>`}${m ? `<br>${esc(m)}` : ""}</div>
+    ${!REAL && r.a === "binance" && r.b !== "binance" ? `<div class="fino">Ciclo com a volta para a Binance: <b class="${r.lucro - custoVolta(r.b) > 0 ? "good" : "bad"}">${RS(r.lucro - custoVolta(r.b))}</b>${custoVolta(r.b) ? ` (Pix ${R(custoVolta(r.b))})` : " (Pix grátis)"}</div>` : ""}
     ${r.slip > 0.005 ? `<div class="slip">⚡ Slippage estimado: ${nf(r.slip, 3)}%</div>` : ""}
     <button class="go" data-exec="${r.a}|${r.b}" ${emExecucao || m ? "disabled" : ""}>${m ? (nc ? "Corretora não conectada" : sal ? "Sem saldo nesta corretora" : "Aguardando lucro") : REAL ? "⚡ Executar (real)" : "⚡ Executar"}</button>
   </div>`;

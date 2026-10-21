@@ -240,6 +240,12 @@ function tentarVender(e, q, p) {
 }
 // "crédito" = lucro das idas que ainda pode pagar a volta para a casa (Binance)
 const CASA = "binance";
+// taxa de saque por Pix (R$) de cada corretora, para trazer o dinheiro de volta à Binance; null = sem Pix (volta por USDT)
+// conferidas em out/2026 (brapi.dev); Chainless: R$ 2,90 citado por usuários na App Store
+export const PIX_SAQUE = { mercadobitcoin: 2.90, foxbit: 0, bitso: 0, novadax: 1.99, picnic: 0, avenia: 0, chainless: 2.90 };
+// ida saindo da Binance: o lucro que conta é o do ciclo inteiro (ida − custo do Pix de volta)
+const custoVolta = b => b === CASA ? 0 : (PIX_SAQUE[b] ?? 0);
+const cicloOk = (r, min) => { const l = r.lucro - custoVolta(r.b); return l > 0 && l / r.valor * 100 >= min; };
 function creditar(e, p, lucro) {
   if (p.a === CASA) e.credito = (e.credito || 0) + Math.max(0, lucro);
   else e.credito = Math.max(0, (e.credito || 0) + lucro);
@@ -256,7 +262,7 @@ function rotasPossiveis(e, q) {
       if (a === b) continue;
       const r = calcRota(e.config, a, b, valor, q[a], q[b]);
       if (r.faltou) continue;
-      if (r.lucro > 0 && r.pct >= e.config.minimo) out.push(r);
+      if (a === CASA ? cicloOk(r, e.config.minimo) : (r.lucro > 0 && r.pct >= e.config.minimo)) out.push(r);
       else if (a !== CASA && b === CASA && r.lucro + credito >= 0) out.push({ ...r, retorno: true, credito });
     }
   }
@@ -335,7 +341,6 @@ export async function venderAgora(id) {
 //   Pix: saca os reais da corretora para o seu banco e faz Pix para a Binance (depósito por Pix na Binance é grátis)
 //   USDT: compra USDT na corretora, saca pela rede mais barata e vende na Binance
 // Taxas de saque por Pix (R$), conferidas em out/2026 (brapi.dev); null = a corretora não tem saque em reais por Pix
-const PIX_SAQUE = { mercadobitcoin: 2.90, foxbit: 0, bitso: 0, novadax: 1.99, picnic: 0, avenia: 0, chainless: 2.90 }; // Chainless: R$ 2,90 citado por usuários na App Store (out/2026)
 function opcoesVoltaCalc(e, c, q) {
   const s = e.saldos[c] || { brl: 0, usdt: 0 };
   const presoUsdt = (e.pendentes || []).filter(p => p.b === c).reduce((t, p) => t + p.chega, 0);
@@ -408,6 +413,7 @@ export async function executarManual(a, b, valorPedido) {
     const credito = e.credito || 0;
     const volta = a !== CASA && b === CASA && r.lucro + credito >= 0;
     if (!volta && (r.lucro <= 0 || r.pct < e.config.minimo)) return { ok: false, semGravar: true, erro: `essa rota agora daria ${RS(r.lucro)} (${pct(r.pct)}), abaixo do mínimo de ${nf(e.config.minimo, 2)}%. Para proteger o saldo, não executei.` };
+    if (a === CASA && !cicloOk(r, e.config.minimo)) return { ok: false, semGravar: true, erro: `a ida dá ${RS(r.lucro)}, mas trazer de volta da ${nome(b)} por Pix custa ${R(custoVolta(b))}: o ciclo daria ${RS(r.lucro - custoVolta(b))}. Para proteger o saldo, não executei.` };
     if (volta && !(r.lucro > 0 && r.pct >= e.config.minimo)) r = { ...r, retorno: true, credito };
     const p = comprar(e, r, true);
     return { ok: true, rota: { id: p.id, a, b, valor, lucro: r.lucro, pct: r.pct, chegaEm: p.chegaEm } };
