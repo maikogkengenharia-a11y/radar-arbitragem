@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>arb desk</title>
 <meta name="robots" content="noindex">
+<link rel="icon" id="favicon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Instrument+Serif:ital@1&display=swap">
 <style>
@@ -373,6 +374,11 @@ svg text{fill:var(--muted);font:10px var(--mono)}
 .vop .tag2{font:600 9.5px var(--mono);letter-spacing:.12em;color:var(--good);border:1px solid var(--good-line);border-radius:999px;padding:2px 8px}
 .volta-btn{background:var(--good-soft);border-color:var(--good-line);color:var(--good);font:600 11px var(--mono);letter-spacing:.06em;padding:5px 10px;border-radius:8px}
 .bal .volta-btn{margin-top:8px;width:100%;padding:5px 6px;font-size:10px}
+.alerta-btn{font:600 10.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;border-radius:999px;padding:6px 12px;color:var(--muted)}
+.alerta-btn.on{color:#03170b;background:var(--good);border-color:var(--good)}
+.alerta-cfg{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;border:1px solid var(--good-line);background:var(--good-soft);border-radius:14px;padding:12px 16px;margin-bottom:14px}
+.alerta-cfg[hidden]{display:none}
+.op.alerta{border-color:var(--good);box-shadow:0 0 0 1px var(--good) inset,0 0 28px #22d97a33}
 .toasts{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:60;max-width:min(380px,calc(100vw - 32px))}
 .toast{background:var(--panel2);border:1px solid var(--rule2);border-left:3px solid var(--good);border-radius:10px;padding:10px 12px;font-size:13px}
 .toast.bad{border-left-color:var(--bad)} .toast.acc{border-left-color:var(--accent)}
@@ -505,7 +511,16 @@ svg text{fill:var(--muted);font:10px var(--mono)}
             <div class="dd" id="opDd"><button>Corretoras · todas ▾</button><div class="menu" id="opMenu"></div></div>
             <span class="simv">SIMULAR (R$)<input id="opValor" type="number" min="50" step="100"></span>
             <span class="chip" id="opCount">— de — rotas</span>
+            <button class="alerta-btn" id="alBtn" title="Avisar na aba do navegador quando aparecer oportunidade com esse lucro">🔔 alerta</button>
           </div></div>
+        <div class="alerta-cfg" id="alCfg" hidden>
+          <label class="ck" style="color:var(--fg2)"><input type="checkbox" id="alOn"> Avisar quando o lucro for a partir de</label>
+          <div class="inp" style="margin:0;width:150px"><span>R$</span><input id="alValor" type="number" min="0" step="0.5"></div>
+          <label class="ck"><input type="checkbox" id="alSom"> com som</label>
+          <label class="ck"><input type="checkbox" id="alNotif"> notificação do navegador</label>
+          <button id="alTeste" class="lnk" style="width:auto">testar aviso</button>
+          <span class="faint" style="font-size:12px;flex-basis:100%">Funciona com o painel aberto em qualquer aba (pode estar em outra aba). A aba pisca com o valor, o ícone fica verde e chega uma notificação. Com a aba escondida por muito tempo, o navegador pode deixar a checagem mais lenta (até 1 vez por minuto).</span>
+        </div>
         <div class="opsbox"><div class="ops" id="ops"></div></div>
         <div class="rk" id="ranking"></div>
       </section>
@@ -1051,13 +1066,14 @@ function renderOps(){
     h += todas.sort((x, y) => (ondeTem.includes(y.a)) - (ondeTem.includes(x.a)) || lucroCiclo(y) - lucroCiclo(x)).slice(0, 40).map(cartaoOp).join("");
   }
   $("#ops").innerHTML = h;
+  checarAlerta(viaveis);
 }
 document.addEventListener("click", e => { if(e.target.closest("#opTodas")){ ui.opTodas = !ui.opTodas; salvarUi(); renderOps(); } });
 function cartaoOp(r){
   const m = motivoInviavel(r), nc = m && (m.includes("conectada") || m.includes("desligada")), sal = m && m.includes("saldo");
   const via = isDex(r.a) || isDex(r.b) ? "via Kyber · Polygon" : `USDT · ${REDE[r.a] || "BEP20"}`;
   const stk = `<span class="stk">${logo(r.a)}${isDex(r.b) || isDex(r.a) ? kyber() : ""}${logo(r.b)}</span>`;
-  return `<div class="op ${m ? "dim" : ""}">
+  return `<div class="op ${m ? "dim" : ""} ${!m && al.on && r.lucro >= al.valor ? "alerta" : ""}">
     <div class="t"><span>${isDex(r.a) ? "DEX" : "CEX"} → ${isDex(r.b) ? "DEX" : "CEX"}</span><span class="st ${m ? (nc ? "nc" : sal ? "sal" : "no") : "ok"}">${m ? (nc ? "não conectada" : sal ? "sem saldo" : "não compensa") : "viável"}</span></div>
     <div class="opm">${stk}<div class="opn"><b>${nome(r.a)} → ${nome(r.b)}</b><small>${via}</small></div>
       <div class="opv"><b class="num ${r.lucro > 0 ? "" : "bad"}">${RS(r.lucro)}</b><span class="${r.lucro > 0 ? "good" : "bad"}">${pct(r.pct, 4)}</span></div></div>
@@ -1108,6 +1124,64 @@ $("#mValor").addEventListener("input", atualizarConfirmar);
 $("#mUsar").addEventListener("click", () => { $("#mValor").value = Math.floor(sim.saldos[conf.a].brl * 100)/100; atualizarConfirmar(); });
 document.querySelectorAll("[data-fechar]").forEach(b => b.addEventListener("click", () => $("#mConf").hidden = true));
 $("#mGo").addEventListener("click", () => { $("#mConf").hidden = true; pedirNotificacao(); executarServidor(conf.a, conf.b, +$("#mValor").value); });
+// ---------- alerta na aba do navegador quando aparece oportunidade com lucro a partir de R$ X
+let al = Object.assign({ on: true, valor: 9, som: true, notif: true }, ler("arb_alerta", {}));
+const TITULO = document.title;
+let alAtivo = null, alPisca = null, alUltimo = {}, audioCtx = null;
+function icone(cor, txt){
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="${cor}"/><text x="32" y="45" font-family="Arial" font-weight="700" font-size="${txt.length > 1 ? 30 : 40}" text-anchor="middle" fill="${cor === "#22d97a" ? "#03170b" : "#1a0800"}">${txt}</text></svg>`;
+  $("#favicon").href = "data:image/svg+xml," + encodeURIComponent(svg);
+}
+function bip(){
+  try{
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.18].forEach(t => { const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = "sine"; o.frequency.value = 880; g.gain.setValueAtTime(0.0001, audioCtx.currentTime + t);
+      g.gain.exponentialRampToValueAtTime(0.25, audioCtx.currentTime + t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + t + 0.15);
+      o.connect(g).connect(audioCtx.destination); o.start(audioCtx.currentTime + t); o.stop(audioCtx.currentTime + t + 0.16); });
+  }catch(e){}
+}
+function avisar(r, teste){
+  const txt = `${RS(r.lucro)} · ${nome(r.a)} → ${nome(r.b)}`;
+  if(al.som) bip();
+  if(al.notif){ try{ if("Notification" in window && Notification.permission === "granted"){
+    const n = new Notification(teste ? "Teste do alerta · arb desk" : `💰 Oportunidade de ${RS(r.lucro)}`, { body: `${nome(r.a)} → ${nome(r.b)} · ${pct(r.pct, 3)}${REAL ? " · DINHEIRO REAL" : " · simulador"}\nClique para abrir a mesa.`, tag: "arb-op", renotify: true });
+    n.onclick = () => { window.focus(); location.hash = "#oportunidades"; n.close(); };
+  } }catch(e){} }
+  if(!teste) toast("🔔 " + txt);
+}
+function checarAlerta(viaveis){
+  const boas = al.on ? viaveis.filter(r => r.lucro >= al.valor).sort((x, y) => y.lucro - x.lucro) : [];
+  const top = boas[0] || null;
+  if(top){
+    const k = top.a + ">" + top.b, agora = Date.now();
+    // avisa quando aparece uma rota nova acima do valor, ou de novo a cada 3 min se continuar lá
+    if(!alAtivo || !alUltimo[k] || agora - alUltimo[k] > 180000){ alUltimo[k] = agora; avisar(top); }
+    alAtivo = { r: top, n: boas.length };
+    if(!alPisca){ let on = false; alPisca = setInterval(() => { on = !on; const a = alAtivo && alAtivo.r;
+      if(!a) return; document.title = on ? `🟢 ${RS(a.lucro)} · ${nome(a.a)} → ${nome(a.b)}` : `(${alAtivo.n}) OPORTUNIDADE · arb desk`;
+      icone(on ? "#22d97a" : "#ff6a13", on ? "$" : String(alAtivo.n)); }, 1000); }
+  } else {
+    alAtivo = null;
+    if(alPisca){ clearInterval(alPisca); alPisca = null; }
+    document.title = viaveis.length ? `(${viaveis.length}) ${TITULO}` : TITULO;
+    icone("#ff6a13", "E");
+  }
+  $("#alBtn").classList.toggle("on", !!al.on);
+  $("#alBtn").textContent = al.on ? `🔔 alerta ≥ ${R(al.valor)}` : "🔕 alerta desligado";
+}
+function salvarAlerta(){ gravar("arb_alerta", al); alUltimo = {}; if(dados) renderOps(); }
+$("#alBtn").addEventListener("click", () => { const c = $("#alCfg"); c.hidden = !c.hidden; });
+$("#alOn").addEventListener("change", () => { al.on = $("#alOn").checked; if(al.on && al.notif) pedirNotificacao(); salvarAlerta(); });
+$("#alValor").addEventListener("change", () => { al.valor = Math.max(0, +$("#alValor").value || 0); salvarAlerta(); toast(`Alerta: avisa quando o lucro for a partir de ${R(al.valor)}.`); });
+$("#alSom").addEventListener("change", () => { al.som = $("#alSom").checked; if(al.som) bip(); salvarAlerta(); });
+$("#alNotif").addEventListener("change", () => { al.notif = $("#alNotif").checked; if(al.notif) pedirNotificacao(); salvarAlerta(); });
+$("#alTeste").addEventListener("click", () => { pedirNotificacao(); avisar({ a: "binance", b: "chainless", lucro: al.valor, pct: al.valor/50 }, true); toast("Assim chega o aviso. A aba também pisca com o valor."); });
+$("#alOn").checked = !!al.on; $("#alValor").value = al.valor; $("#alSom").checked = !!al.som; $("#alNotif").checked = !!al.notif;
+icone("#ff6a13", "E");
+// na primeira interação com a página, pede a permissão de notificação (o navegador só deixa pedir depois de um clique)
+document.addEventListener("click", function primeiro(){ if(al.on && al.notif) pedirNotificacao(); document.removeEventListener("click", primeiro); }, { once: true });
+
 function pedirNotificacao(){ try{ if("Notification" in window && Notification.permission === "default") Notification.requestPermission(); }catch(e){} }
 function notificar(t, c){ try{ if("Notification" in window && Notification.permission === "granted" && document.hidden) new Notification(t, {body: c}); }catch(e){} }
 
