@@ -335,7 +335,7 @@ export async function venderAgora(id) {
 //   Pix: saca os reais da corretora para o seu banco e faz Pix para a Binance (depósito por Pix na Binance é grátis)
 //   USDT: compra USDT na corretora, saca pela rede mais barata e vende na Binance
 // Taxas de saque por Pix (R$), conferidas em out/2026 (brapi.dev); null = a corretora não tem saque em reais por Pix
-const PIX_SAQUE = { mercadobitcoin: 2.90, foxbit: 0, bitso: 0, novadax: 1.99, picnic: 0, avenia: 0, chainless: 0 };
+const PIX_SAQUE = { mercadobitcoin: 2.90, foxbit: 0, bitso: 0, novadax: 1.99, picnic: 0, avenia: 0, chainless: 2.90 }; // Chainless: R$ 2,90 citado por usuários na App Store (out/2026)
 function opcoesVoltaCalc(e, c, q) {
   const s = e.saldos[c] || { brl: 0, usdt: 0 };
   const presoUsdt = (e.pendentes || []).filter(p => p.b === c).reduce((t, p) => t + p.chega, 0);
