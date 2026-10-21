@@ -330,6 +330,67 @@ export async function venderAgora(id) {
   });
 }
 
+// ---------------------------------------------------------------- mandar o dinheiro de volta para a Binance
+// Igual à vida real. Dois caminhos:
+//   Pix: saca os reais da corretora para o seu banco e faz Pix para a Binance (depósito por Pix na Binance é grátis)
+//   USDT: compra USDT na corretora, saca pela rede mais barata e vende na Binance
+// Taxas de saque por Pix (R$), conferidas em out/2026 (brapi.dev); null = a corretora não tem saque em reais por Pix
+const PIX_SAQUE = { mercadobitcoin: 2.90, foxbit: 0, bitso: 0, novadax: 1.99, picnic: 0, avenia: 0, chainless: 0 };
+function opcoesVoltaCalc(e, c, q) {
+  const s = e.saldos[c] || { brl: 0, usdt: 0 };
+  const presoUsdt = (e.pendentes || []).filter(p => p.b === c).reduce((t, p) => t + p.chega, 0);
+  const usdtLivre = Math.max(0, s.usdt - presoUsdt), brl = Math.floor(s.brl * 100) / 100;
+  const casa = q[CASA], opcoes = [];
+  // valor de referência do que está lá, em reais (USDT pelo preço de venda da Binance)
+  const refUsdt = casa ? usdtLivre * casa.bids[0][0] : 0;
+  const valor = brl + refUsdt;
+  // USDT parado na corretora: saca direto para a Binance e vende lá
+  let usdtFinal = 0;
+  if (usdtLivre > 0 && casa) {
+    const chega = Math.max(0, usdtLivre - (e.config.saque[c] ?? 1));
+    const v = percorrer(casa.bids, chega, false); usdtFinal = v.rec * (1 - (e.config.taxas[CASA] ?? 0.1) / 100);
+  }
+  if (PIX_SAQUE[c] != null && brl > 0) {
+    const final = Math.max(0, brl - PIX_SAQUE[c]) + usdtFinal;
+    opcoes.push({ via: "pix", nome: "Pix", final, custo: valor - final, tempo: "na hora",
+      passos: [`Sacar ${R(brl)} da ${nome(c)} por Pix para o seu banco${PIX_SAQUE[c] ? ` (taxa ${R(PIX_SAQUE[c])})` : " (grátis)"}`, "Fazer Pix do banco para a Binance (grátis)"] });
+  }
+  if (brl >= 20 && q[c] && casa && c !== CASA) {
+    const r = calcRota(e.config, c, CASA, brl, q[c], casa);
+    if (!r.faltou) opcoes.push({ via: "usdt", nome: "USDT", final: r.final + usdtFinal, custo: valor - (r.final + usdtFinal), tempo: "cerca de 2 min",
+      passos: [`Comprar ${nf(r.usdt)} USDT na ${nome(c)} a ${nf(r.medioCompra, 4)}`, `Sacar para a Binance (taxa ${nf(r.saque)} USDT)`, `Vender na Binance a ${nf(r.medioVenda, 4)}`] });
+  }
+  if (!brl && usdtLivre > 0 && casa) opcoes.push({ via: "usdt", nome: "USDT", final: usdtFinal, custo: valor - usdtFinal, tempo: "cerca de 2 min",
+    passos: [`Sacar ${nf(usdtLivre)} USDT da ${nome(c)} para a Binance (taxa ${nf(e.config.saque[c] ?? 1)} USDT)`, "Vender na Binance"] });
+  opcoes.sort((x, y) => y.final - x.final);
+  return { c, brl, usdt: usdtLivre, presoUsdt, valor, opcoes, credito: e.credito || 0 };
+}
+export async function opcoesVolta(c) {
+  if (!(c in BRL) || c === CASA) throw new Error("corretora inválida");
+  const q = await precos([c, CASA]);
+  const { e } = await lerEstado();
+  return { ok: true, ...opcoesVoltaCalc(e, c, q) };
+}
+export async function devolver(c, via) {
+  if (!(c in BRL) || c === CASA) throw new Error("corretora inválida");
+  const q = await precos([c, CASA]);
+  return alterar(e => {
+    const o = opcoesVoltaCalc(e, c, q);
+    const op = o.opcoes.find(x => x.via === via) || o.opcoes[0];
+    if (!op || o.valor < 1) return { ok: false, semGravar: true, erro: `não há dinheiro livre na ${nome(c)} para mandar` };
+    const agora = Date.now(), lucro = op.final - o.valor;
+    e.saldos[c].brl -= o.brl; e.saldos[c].usdt -= o.usdt;
+    if (Math.abs(e.saldos[c].brl) < 0.005) e.saldos[c].brl = 0;
+    if (Math.abs(e.saldos[c].usdt) < 1e-6) e.saldos[c].usdt = 0;
+    e.saldos[CASA].brl += op.final;
+    e.hist.unshift({ id: agora, t: agora, a: c, b: CASA, valor: o.valor, usdt: o.usdt, compra: 0, venda: 0, taxas: op.custo, lucro, pct: lucro / o.valor * 100,
+      previsto: lucro, auto: false, final: op.final, modo: "volta-" + op.via, servidor: true, duracao: 0, volta: true, viaVolta: op.via });
+    e.credito = Math.max(0, (e.credito || 0) + lucro);
+    log(e, `Dinheiro de volta para a Binance por ${op.nome}: saiu ${R(o.valor)} da ${nome(c)}, chegou ${R(op.final)} (custo ${R(op.custo)}).`, "good");
+    return { ok: true, via: op.via, final: op.final, custo: op.custo, de: c };
+  });
+}
+
 // botão Executar (manual)
 export async function executarManual(a, b, valorPedido) {
   if (!(a in BRL) || !(b in BRL) || a === b) throw new Error("rota inválida");
