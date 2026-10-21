@@ -710,7 +710,7 @@ async function loop() {
 // ---------------------------------------------------------------- painel (HTTP, protegido por PIN)
 // ---------------------------------------------------------------- ranking das rotas (nota 0–100)
 // nota = frequência (até 35) + lucro médio (até 30) + quão perto chegou do lucro (até 15) + facilidade das corretoras (até 20)
-const FACIL = { binance: 10, polygon: 10, bitget: 7, bybit: 7, foxbit: 4, mercadobitcoin: 4, bitso: 4 };
+const FACIL = { binance: 10, polygon: 10, chainless: 6, bitget: 7, bybit: 7, okx: 7, foxbit: 4, mercadobitcoin: 4, bitso: 4 };
 function ranking() {
   const desde = E.radarDesde || agora();
   const dias = Math.max((agora() - desde) / 86400e3, 1 / 24);
@@ -881,10 +881,12 @@ http.createServer(async (req, res) => {
         }
         if (rota === "regras" && req.method === "POST") {
           const num = (v, a, z) => { const x = Number(v); return Number.isFinite(x) && x >= a && x <= z ? x : null; };
-          const minimo = num(b.minimo, 0, 5), max = num(b.max, 50, 1000000);
+          const minimo = num(b.minimo, 0, 5), max = num(b.max, 50, 1000000), intervalo = num(b.intervaloMin, 0, 60);
           return enviar(200, await SIM.alterar(e => {
             if (minimo != null) e.config.minimo = minimo;
             if (max != null) e.config.max = max;
+            if (intervalo != null) e.config.intervaloMin = intervalo;
+            if (Array.isArray(b.corretoras)) { const ok = b.corretoras.filter(c => c in e.config.taxas); if (ok.length >= 2) e.config.corretoras = ok; }
             if (b.perfil) e.config.perfil = String(b.perfil).slice(0, 20);
             e.log.unshift({ t: Date.now(), txt: `Regras${b.perfil ? ` (perfil ${b.perfil})` : ""}: lucro mínimo ${e.config.minimo}% e até R$ ${e.config.max} por operação.`, tipo: "acc" });
             return { ok: true, config: e.config };

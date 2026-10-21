@@ -99,6 +99,15 @@ function migrar(e) {
     e.taxasVersao = 7;
     e.log = [{ t: Date.now(), txt: "Simulação zerada: R$ 5.000 na Binance, regras iguais às do real (sem Pix grátis; volta para a Binance com custo real), uma operação por vez, automático desligado.", tipo: "good" }];
   }
+  if ((e.taxasVersao || 0) < 8) {
+    // 21/10: OKX entra (tem USDT/BRL); Chainless passa a usar BRZ na KyberSwap
+    if (!e.config.corretoras.includes("okx")) e.config.corretoras.push("okx");
+    e.config.taxas.okx = e.config.taxas.okx ?? 0.10;
+    e.config.saque.okx = e.config.saque.okx ?? 0.50;
+    e.config.intervaloMin = e.config.intervaloMin ?? 1;
+    e.taxasVersao = 8;
+    log(e, "OKX conectada ao simulador (USDT/BRL). A Chainless agora usa BRZ na KyberSwap, que costuma pagar mais que o BRLA.", "acc");
+  }
 }
 const MAX_SIMULTANEAS = 1; // uma operação por vez (pedido do usuário em 20/10)
 // várias operações ao mesmo tempo; "pendente" continua existindo (a mais antiga) para o painel
