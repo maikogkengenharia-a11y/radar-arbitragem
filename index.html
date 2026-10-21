@@ -49,6 +49,7 @@ a{color:var(--accent)}
 .nav a:hover{color:var(--fg);background:#ffffff06}
 .nav a.on{color:var(--fg);background:var(--panel2)}
 .nav a.on svg{color:var(--accent);opacity:1}
+.badge[hidden]{display:none!important}
 .badge{margin-left:auto;background:var(--accent);color:#1a0800;font:700 10px var(--mono);border-radius:999px;min-width:18px;height:18px;display:inline-grid;place-items:center;padding:0 5px}
 .side .foot{margin-top:auto;display:flex;flex-direction:column;gap:10px;padding:8px 6px}
 .modoBtn{font:600 10.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--warn);border:1px solid var(--warn);border-radius:8px;padding:7px 8px;background:transparent;width:100%}
@@ -460,7 +461,7 @@ svg text{fill:var(--muted);font:10px var(--mono)}
           <div class="ask"><div class="lbl">Menor ask · comprar</div><div class="v num" id="kAsk">—</div><div class="s" id="kAskS"></div></div>
           <div class="arr"><svg viewBox="0 0 60 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8h54M50 3l6 5-6 5"/></svg><span class="lbl" style="font-size:9px">arbitragem</span></div>
           <div class="bid"><div class="lbl">Maior bid · vender</div><div class="v num" id="kBid">—</div><div class="s" id="kBidS"></div></div>
-          <div class="spr" id="kSprBox"><div class="lbl">Spread bruto</div><div class="v num" id="kSpr">—</div><div class="s" id="kSprS">oportunidade ativa</div></div>
+          <div class="spr" id="kSprBox"><div class="lbl">Spread bruto · antes das taxas</div><div class="v num" id="kSpr">—</div><div class="s" id="kSprS">—</div></div>
         </div>
         <div class="grp cex">Corretoras centralizadas (CEX)</div>
         <div class="exs" id="exsCex"></div>
@@ -815,7 +816,7 @@ function rotaTexto(r){
 function renderTicker(){
   const r = melhorRota(), q = dados.cotacoes;
   const itens = [];
-  if(r) itens.push(`<span><span class="tdot"></span>TOP ROTA <b>${esc(rotaTexto(r))}</b> <span class="${r.pct > 0 ? "good" : "bad"}">${r.pct > 0 ? "▲" : "▼"} ${pct(r.pct, 4)}</span></span>`);
+  if(r) itens.push(`<span><span class="tdot"></span>MELHOR ROTA AGORA <b>${esc(rotaTexto(r))}</b> <span class="${r.pct > 0 ? "good" : "bad"}">${r.pct > 0 ? "▲" : "▼"} ${pct(r.pct, 4)}</span></span>`);
   for(const c of CEX) if(q[c]) itens.push(`<span>${nome(c).toUpperCase()} <b>R$ ${P4((q[c].ask+q[c].bid)/2)}</b></span>`);
   if(q.polygon) itens.push(`<span>KYBER-BRLA <b>R$ ${P4(q.polygon.bid)}</b></span>`);
   if(q.chainless) itens.push(`<span>KYBER-BRZ <b>R$ ${P4(q.chainless.bid)}</b></span>`);
@@ -834,7 +835,7 @@ function renderConta(){
   const vivas = LIDAS.filter(c => dados && dados.cotacoes[c]).length;
   $("#ctCon").innerHTML = `<span class="dot on"></span>${REAL ? `${con.length} conectadas ao robô real` : `${vivas} de ${LIDAS.length} respondendo`}`;
   $("#ctUsdt").textContent = `USDT R$ ${nf(mid, 2)}`;
-  const mostrar = REAL ? con : [...new Set(["binance", ...cs.filter(c => sim.saldos[c].brl > 0.004 || sim.saldos[c].usdt > 0.00001)])];
+  const mostrar = REAL ? con : [...new Set(["binance", ...cs.filter(c => sim.saldos[c].brl >= 1 || sim.saldos[c].usdt >= 0.2)])];
   $("#ctBals").innerHTML = mostrar.map(c => { const s = sim.saldos[c], on = con.includes(c);
     return `<div class="bal ${on || !REAL ? "" : "off"}"><div class="nm"><span class="dot ${on ? "on" : ""}"></span>${logo(c, "sm")}${nome(c)}</div><div class="v num">${R(s.brl + s.usdt*mid)}</div><div class="v2">₮ ${nf(s.usdt)} · R$ ${nf(s.brl)}</div>${botaoVolta(c, s)}</div>`; }).join("");
   renderServicos();
@@ -868,7 +869,7 @@ function renderPulse(){
   $("#kBid").innerHTML = `<small>R$</small>${P4(q[maxB].bid)}`; $("#kBidS").textContent = "em " + nomeK(maxB);
   const spr = (q[maxB].bid/q[minA].ask - 1)*100;
   $("#kSpr").textContent = pct(spr, 4); $("#kSprBox").classList.toggle("neg", spr <= 0);
-  $("#kSprS").textContent = spr > 0 ? "oportunidade ativa" : "sem spread agora";
+  
   const cartao = c => {
     const x = q[c], s = sim.saldos[c], t = ticks[c] || [];
     const tipo = c === minA ? "buy" : c === maxB ? "sell" : "";
@@ -982,7 +983,7 @@ document.addEventListener("change", e => {
 // ============================================================ 03 saldos & p&l
 function renderSaldos(){
   const mid = midAtual(), cs = Object.keys(EX), con = conectadas();
-  const lin = cs.map(c => ({c, s: sim.saldos[c], tot: sim.saldos[c].brl + sim.saldos[c].usdt*mid})).filter(x => x.tot > 0.004 || (REAL && con.includes(x.c)) || (!REAL && x.c === "binance"));
+  const lin = cs.map(c => ({c, s: sim.saldos[c], tot: sim.saldos[c].brl + sim.saldos[c].usdt*mid})).filter(x => x.tot >= 1 || (REAL && con.includes(x.c)) || (!REAL && x.c === "binance"));
   const total = lin.reduce((t, x) => t + x.tot, 0);
   const lucro = sim.hist.reduce((t, h) => t + (h.lucro || 0), 0);
   const hoje = new Date().toDateString(), hh = sim.hist.filter(h => new Date(h.t).toDateString() === hoje);
@@ -1016,17 +1017,42 @@ function renderOps(){
   const valor = +$("#opValor").value || +ui.valor;
   const lista = (valor === +ui.valor ? rotas : calcularRotas(valor)).filter(r => !ui.opEx || (ui.opEx.includes(r.a) && ui.opEx.includes(r.b)));
   const integ = $("#opInteg").checked;
-  const base = integ ? lista.filter(r => conectadas().includes(r.a) && conectadas().includes(r.b) && sim.saldos[r.a].brl >= 20) : lista;
+  const base = integ ? lista.filter(r => conectadas().includes(r.a) && conectadas().includes(r.b)) : lista;
+  // oportunidade de verdade = dá lucro depois de TODAS as taxas (e da volta para a Binance) e sai de onde está o seu dinheiro
   const viaveis = base.filter(r => !motivoInviavel(r));
-  const comLucro = base.filter(r => !r.faltou && r.lucro > 0);
   ["#nOps", "#nOps2"].forEach(s => { $(s).hidden = !viaveis.length; $(s).textContent = viaveis.length; });
-  $("#opCount").textContent = `${viaveis.length} de ${base.length} rotas`;
-  // mostra as viáveis; depois as que dão lucro mas estão travadas (sem saldo, conexão…); depois as mais perto de dar lucro
-  const resto = base.filter(r => motivoInviavel(r)).sort((x, y) => (sim.saldos[y.a].brl >= 50) - (sim.saldos[x.a].brl >= 50) || y.lucro - x.lucro);
-  const mostrar = [...viaveis, ...resto].slice(0, Math.max(12, viaveis.length));
-  $("#ops").innerHTML = (!viaveis.length ? `<div class="banner info" style="grid-column:1/-1">${comLucro.length ? `Há ${comLucro.length} rota(s) com lucro, mas travadas (veja o motivo em cada cartão). ` : "Nenhuma rota dá lucro com todas as taxas neste momento. "}O seu dinheiro está em: <b>${Object.keys(EX).filter(c => sim.saldos[c].brl >= 20).map(nome).join(", ") || "nenhuma corretora"}</b>.${(() => { const m = base.filter(r => sim.saldos[r.a].brl >= 50 && !r.faltou)[0]; return m ? ` A melhor rota saindo de lá agora é <b>${nome(m.a)} → ${nome(m.b)}</b>: ${esc(motivoInviavel(m) || "")}.` : ""; })()} Quando uma rota ficar viável, o botão vira ⚡ Executar.</div>` : "")
-    + mostrar.map(cartaoOp).join("");
+  $("#opCount").textContent = viaveis.length ? `${viaveis.length} oportunidade${viaveis.length > 1 ? "s" : ""} agora` : "nenhuma oportunidade agora";
+  $("#opCount").style.color = viaveis.length ? "var(--good)" : "";
+  $("#kSprS").textContent = viaveis.length ? `${viaveis.length} oportunidade${viaveis.length > 1 ? "s" : ""} com lucro real` : "antes das taxas · sem lucro real agora";
+  const ondeTem = Object.keys(EX).filter(c => sim.saldos[c].brl >= 50);
+  const daqui = base.filter(r => ondeTem.includes(r.a) && !r.faltou);
+  const lucroCiclo = r => r.lucro - (!REAL && r.a === "binance" ? custoVolta(r.b) : 0);
+  const perto = daqui.slice().sort((x, y) => lucroCiclo(y) - lucroCiclo(x))[0];
+  const outras = base.filter(r => !ondeTem.includes(r.a) && !r.faltou && r.lucro > 0);
+  let h = "";
+  if(viaveis.length) h += viaveis.map(cartaoOp).join("");
+  else {
+    const min = servidor ? servidor.config.minimo : 0;
+    const falta = perto ? Math.max(0, (min/100*perto.valor - lucroCiclo(perto))/perto.valor*100) : 0;
+    const pend = servidor && ((servidor.pendentes || []).length || (REAL && servidor.pendente));
+    h += `<div class="card" style="grid-column:1/-1;display:flex;flex-direction:column;gap:12px;align-items:center;text-align:center;padding:34px 18px">
+      <div style="font:600 19px var(--sans)">${pend ? "Operação em andamento" : "Nenhuma oportunidade agora"}</div>
+      <div class="muted" style="max-width:640px;font-size:13.5px">${pend ? "Espere a operação atual terminar; depois a mesa volta a procurar." : `Com todas as taxas${REAL ? "" : " e a volta para a Binance"}, nenhuma rota saindo de onde está o seu dinheiro dá lucro neste momento. A mesa recalcula a cada 4 segundos: quando aparecer uma, ela surge aqui com o botão ⚡ Executar e o número acende no menu.`}</div>
+      <div class="row" style="justify-content:center;gap:8px">${ondeTem.length ? ondeTem.map(c => `<span class="chip">${logo(c, "sm")}${nome(c)} · ${R(sim.saldos[c].brl)}</span>`).join("") : `<span class="chip">sem reais em nenhuma corretora</span>`}</div>
+      ${perto && !pend ? `<div class="fino" style="font-size:12px">A mais perto de dar lucro: <b>${nome(perto.a)} → ${nome(perto.b)}</b> daria <b class="bad">${RS(lucroCiclo(perto))}</b>. Falta o preço abrir mais uns <b>${nf(falta, 3)}%</b>.</div>` : ""}
+    </div>`;
+  }
+  // tudo o resto fica escondido: só para quem quiser conferir as contas
+  const todas = base.filter(r => !viaveis.includes(r));
+  h += `<div style="grid-column:1/-1;display:flex;justify-content:center;gap:10px;flex-wrap:wrap">
+    <button class="lnk" id="opTodas" style="width:auto;border:1px solid var(--rule2);border-radius:999px;padding:7px 14px">${ui.opTodas ? "▲ esconder as rotas sem lucro" : `▼ ver as ${todas.length} rotas calculadas que não compensam`}</button></div>`;
+  if(ui.opTodas){
+    if(outras.length) h += `<div class="banner info" style="grid-column:1/-1">${outras.length} rota(s) dariam lucro, mas saem de corretoras onde você não tem dinheiro (${[...new Set(outras.map(r => nome(r.a)))].join(", ")}). Igual à vida real: o dinheiro só sai de onde ele está.</div>`;
+    h += todas.sort((x, y) => (ondeTem.includes(y.a)) - (ondeTem.includes(x.a)) || lucroCiclo(y) - lucroCiclo(x)).slice(0, 40).map(cartaoOp).join("");
+  }
+  $("#ops").innerHTML = h;
 }
+document.addEventListener("click", e => { if(e.target.closest("#opTodas")){ ui.opTodas = !ui.opTodas; salvarUi(); renderOps(); } });
 function cartaoOp(r){
   const m = motivoInviavel(r), nc = m && (m.includes("conectada") || m.includes("desligada")), sal = m && m.includes("saldo");
   const via = isDex(r.a) || isDex(r.b) ? "via Kyber · Polygon" : `USDT · ${REDE[r.a] || "BEP20"}`;
@@ -1037,7 +1063,7 @@ function cartaoOp(r){
       <div class="opv"><b class="num ${r.lucro > 0 ? "" : "bad"}">${RS(r.lucro)}</b><span class="${r.lucro > 0 ? "good" : "bad"}">${pct(r.pct, 4)}</span></div></div>
     <div class="mt2"><div><small>SPREAD</small><b class="${r.bruto > 0 ? "good" : "bad"}">${pct(r.bruto, 4)}</b></div><div><small>TAXAS</small><b>${pct(r.bruto - r.pct, 4)}</b></div></div>
     <div class="fino">Trade: <b>${R(r.trade)}</b> · Rede: <b>${R(r.rede)}</b>${isDex(r.b) ? ` · sai como <b>${EX[r.b].token}</b>` : ` → líquido <b>${R(r.final)}</b>`}${m ? `<br>${esc(m)}` : ""}</div>
-    ${!REAL && r.a === "binance" && r.b !== "binance" ? `<div class="fino">Ciclo com a volta para a Binance: <b class="${r.lucro - custoVolta(r.b) > 0 ? "good" : "bad"}">${RS(r.lucro - custoVolta(r.b))}</b>${custoVolta(r.b) ? ` (Pix ${R(custoVolta(r.b))})` : " (Pix grátis)"}</div>` : ""}
+    ${!REAL && r.a === "binance" && custoVolta(r.b) > 0 ? `<div class="fino">Ciclo com a volta para a Binance: <b class="${r.lucro - custoVolta(r.b) > 0 ? "good" : "bad"}">${RS(r.lucro - custoVolta(r.b))}</b>${custoVolta(r.b) ? ` (Pix ${R(custoVolta(r.b))})` : " (Pix grátis)"}</div>` : ""}
     ${r.slip > 0.005 ? `<div class="slip">⚡ Slippage estimado: ${nf(r.slip, 3)}%</div>` : ""}
     <button class="go" data-exec="${r.a}|${r.b}" ${emExecucao || m ? "disabled" : ""}>${m ? (nc ? "Corretora não conectada" : sal ? "Sem saldo nesta corretora" : "Aguardando lucro") : REAL ? "⚡ Executar (real)" : "⚡ Executar"}</button>
   </div>`;
