@@ -1164,7 +1164,7 @@ function checarAlerta(viaveis){
   } else {
     alAtivo = null;
     if(alPisca){ clearInterval(alPisca); alPisca = null; }
-    document.title = viaveis.length ? `(${viaveis.length}) ${TITULO}` : TITULO;
+    document.title = TITULO; // o "(N)" na aba só aparece quando o lucro passa do valor do alerta
     icone("#ff6a13", "E");
   }
   $("#alBtn").classList.toggle("on", !!al.on);
