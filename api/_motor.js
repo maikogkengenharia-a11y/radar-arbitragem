@@ -120,6 +120,7 @@ function migrar(e) {
     e.aportes = 5000 * TODAS.length; e.hist = []; e.pendentes = []; e.pendente = null; e.ultimaOp = 0; e.credito = 0;
     e.config.max = 5000; e.ligado = false; e.criado = Date.now();
     e.taxasVersao = 9;
+    e.log = [{ t: Date.now(), txt: `Simulação zerada: R$ 5.000 em cada uma das ${TODAS.length} corretoras (R$ ${(5000 * TODAS.length).toLocaleString("pt-BR")} no total). Automático desligado.`, tipo: "good" }];
   }
   if ((e.taxasVersao || 0) < 10) {
     // 27/10: MEXC e KuCoin entram (MEXC lista o par como BRL/USDT; a mesa inverte a conta), com R$ 5.000 cada
@@ -132,7 +133,6 @@ function migrar(e) {
     }
     e.taxasVersao = 10;
     log(e, "MEXC e KuCoin conectadas ao simulador com R$ 5.000 cada.", "good");
-    e.log = [{ t: Date.now(), txt: `Simulação zerada: R$ 5.000 em cada uma das ${TODAS.length} corretoras (R$ ${(5000 * TODAS.length).toLocaleString("pt-BR")} no total). Automático desligado.`, tipo: "good" }];
   }
 }
 const MAX_SIMULTANEAS = 1; // uma operação por vez (pedido do usuário em 20/10)
