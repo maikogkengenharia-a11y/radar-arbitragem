@@ -644,12 +644,17 @@ svg text{fill:var(--muted);font:10px var(--mono)}
   </div>
 </div>
 
-<!-- mandar de volta para a Binance (simulador) -->
+<!-- mandar o dinheiro de volta para a corretora de onde saiu (simulador) -->
 <div class="modal" id="mVolta" hidden>
   <div class="box" role="dialog" aria-modal="true" aria-labelledby="mVoltaT">
-    <div class="row sp" style="align-items:flex-start"><div><div class="lbl" style="color:var(--good)">Simulador · igual à vida real</div><h3 id="mVoltaT">mandar de volta para a Binance</h3></div><button class="x" data-fechar-volta>✕</button></div>
+    <div class="row sp" style="align-items:flex-start"><div><div class="lbl" style="color:var(--good)">Simulador · igual à vida real</div><h3 id="mVoltaT">mandar de volta</h3></div><button class="x" data-fechar-volta>✕</button></div>
     <div class="diag" id="vDiag"></div>
     <div class="disp" id="vSaldo"></div>
+    <div class="row" style="gap:12px;align-items:flex-end">
+      <div style="flex:1;min-width:160px"><div class="lbl" style="margin-bottom:6px">Mandar para</div><select id="vDest" style="width:100%"></select></div>
+      <div style="flex:1;min-width:160px"><div class="lbl" style="margin-bottom:6px">Quanto · R$</div><div class="inp" style="margin:0"><input id="vValor" type="number" min="1" step="0.01"></div></div>
+      <button id="vTudo" class="lnk" style="width:auto;padding-bottom:12px">tudo</button>
+    </div>
     <div class="lbl">Escolha o caminho · o mais barato já vem marcado</div>
     <div id="vOps" style="display:flex;flex-direction:column;gap:10px"></div>
     <div id="vInfo"></div>
@@ -1256,7 +1261,7 @@ async function acompanhar(){
       desenharExec();
       $("#eRes").innerHTML = `<div class="res ${h.lucro < 0 ? "neg" : ""}"><div class="lbl">✓ Operação concluída</div><div class="v">${RS(h.lucro)}<span>${pct(h.pct, 2)}</span></div>
         <div class="faint" style="font-size:12px;margin-top:6px">previsto na entrada: ${RS(h.previsto || 0)}${isDex(h.b) ? ` · o dinheiro está em ${EX[h.b] ? EX[h.b].token : ""} na ${nome(h.b)}` : ` · o dinheiro está em reais na ${nome(h.b)}`}</div></div>
-        ${!REAL && h.b !== "binance" ? `<button class="go ok" data-volta="${h.b}" style="width:100%">↩ Mandar de volta para a Binance</button><div class="faint" style="font-size:11.5px;text-align:center">como na vida real: sacar da ${nome(h.b)} e colocar de novo na Binance, com a taxa de verdade</div>` : ""}`;
+        ${!REAL && h.b !== h.a ? `<button class="go ok" data-volta="${h.b}" data-destino="${h.a}" data-valor="${(+h.final || 0).toFixed(2)}" style="width:100%">↩ Mandar de volta para a ${nome(h.a)}</button><div class="faint" style="font-size:11.5px;text-align:center">como na vida real: sacar os ${R(h.final)} da ${nome(h.b)} e colocar de novo na ${nome(h.a)}, de onde saiu, com a taxa de verdade</div>` : ""}`;
       $("#mExecEy").textContent = "Concluída"; $("#mExecT").textContent = "operação concluída"; $("#mExecMin").textContent = "fechar";
       toast(`${nome(h.a)} → ${nome(h.b)} concluída: ${RS(h.lucro)}`); notificar(REAL ? "Operação REAL concluída" : "Operação concluída (simulação)", `${nome(h.a)} → ${nome(h.b)}: ${RS(h.lucro)}`);
       return;
@@ -1283,55 +1288,70 @@ async function venderJa(){
 }
 document.addEventListener("click", e => { if(e.target.closest("#bVenderJa, #mVenderJa")) venderJa(); });
 
-// ============================================================ mandar de volta para a Binance (simulador)
+// ============================================================ mandar o dinheiro de volta (simulador)
+// depois de uma operação, o dinheiro volta para a corretora de onde SAIU; nos saldos dá para mover para qualquer uma
 function botaoVolta(c, s){
-  if(REAL || c === "binance" || !s || (s.brl < 1 && s.usdt < 0.2)) return "";
-  return `<button class="volta-btn" data-volta="${c}" title="Sacar da ${nome(c)} e colocar de novo na Binance">↩ Mandar para a Binance</button>`;
+  if(REAL || !s || (s.brl < 1 && s.usdt < 0.2)) return "";
+  const d = c === "binance" ? "" : "binance";
+  return `<button class="volta-btn" data-volta="${c}" data-destino="${d}" title="Sacar da ${nome(c)} e colocar em outra corretora">↩ Mover</button>`;
 }
-let volta = null;
-async function abrirVolta(c){
-  volta = { c, via: null, d: null };
+let volta = null, voltaSeq = 0;
+function abrirVolta(c, dest, valor){
+  const opcoes = LIDAS.filter(x => x !== c);
+  volta = { c, dest: opcoes.includes(dest) ? dest : (c === "binance" ? opcoes[0] : "binance"), valor: +valor || 0, via: null, d: null, origem: +valor ? dest : null };
   $("#mExec").hidden = true;
+  $("#vDest").innerHTML = opcoes.map(x => `<option value="${x}" ${x === volta.dest ? "selected" : ""}>${nome(x)}</option>`).join("");
+  $("#vValor").value = volta.valor ? volta.valor.toFixed(2) : "";
+  $("#mVolta").hidden = false;
+  calcularVolta();
+}
+async function calcularVolta(){
+  const {c, dest} = volta, seq = ++voltaSeq;
+  $("#mVoltaT").textContent = `mandar para a ${nome(dest)}`;
   $("#vDiag").innerHTML = `<div class="nodes">
     <div class="node">${logo(c)}<b>${nome(c).toUpperCase()}</b><small style="color:var(--accent)">sai daqui</small></div>
     <div class="edge">→<span>PIX ou USDT</span></div>
-    <div class="node">${logo("binance")}<b>BINANCE</b><small style="color:var(--good)">volta pra casa</small></div></div>`;
-  $("#vSaldo").innerHTML = `<div class="muted">Calculando os dois caminhos com os preços de agora…</div>`;
+    <div class="node">${logo(dest)}<b>${nome(dest).toUpperCase()}</b><small style="color:var(--good)">${volta.origem === dest ? "de onde saiu" : "chega aqui"}</small></div></div>`;
+  $("#vSaldo").innerHTML = `<div class="muted">Calculando os caminhos com os preços de agora…</div>`;
   $("#vOps").innerHTML = ""; $("#vInfo").innerHTML = ""; $("#vGo").disabled = true;
-  $("#mVolta").hidden = false;
   try{
-    const r = await fetch(`/api/volta?c=${encodeURIComponent(c)}`, {cache:"no-store"}); const d = await r.json();
+    const r = await fetch(`/api/volta?c=${encodeURIComponent(c)}&d=${encodeURIComponent(dest)}&valor=${volta.valor || ""}`, {cache:"no-store"}); const d = await r.json();
+    if(seq !== voltaSeq) return;
     if(!d.ok || !Array.isArray(d.opcoes)) throw new Error(d.erro || "o servidor ainda não tem essa função (atualiza em até 3 min)");
     volta.d = d; volta.via = d.opcoes[0] && d.opcoes[0].via; desenharVolta();
-  }catch(err){ $("#vSaldo").innerHTML = `<div class="bad">Não consegui calcular: ${esc(err.message)}</div>`; }
+  }catch(err){ if(seq === voltaSeq) $("#vSaldo").innerHTML = `<div class="bad">Não consegui calcular: ${esc(err.message)}</div>`; }
 }
 function desenharVolta(){
-  const d = volta.d;
-  $("#vSaldo").innerHTML = `<div class="row sp"><span class="muted">Na ${nome(d.c)} agora</span><span class="mono good">${R(d.brl)}${d.usdt > 0.0001 ? ` + ${nf(d.usdt)} USDT` : ""}</span></div>
-    <div class="row sp"><span class="muted">Vale em reais</span><span class="mono">${R(d.valor)}</span></div>
+  const d = volta.d, N = nome(d.d || volta.dest);
+  $("#vSaldo").innerHTML = `<div class="row sp"><span class="muted">Na ${nome(d.c)} agora</span><span class="mono good">${R(d.brlTudo ?? d.brl)}${d.usdt > 0.0001 ? ` + ${nf(d.usdt)} USDT` : ""}</span></div>
+    <div class="row sp"><span class="muted">Vai sair</span><span class="mono">${R(d.valor)}</span></div>
     ${d.presoUsdt > 0 ? `<div class="warn" style="font-size:12px">${nf(d.presoUsdt)} USDT estão numa operação em andamento e ficam lá.</div>` : ""}`;
-  if(!d.opcoes.length){ $("#vOps").innerHTML = `<div class="empty">Não dá para mandar agora: ${d.valor < 1 ? "não há dinheiro livre aqui" : "sem preço da corretora agora"}.</div>`; $("#vGo").disabled = true; return; }
+  if(!d.opcoes.length){ $("#vOps").innerHTML = `<div class="empty">Não dá para mandar agora: ${d.valor < 1 ? "não há dinheiro livre aqui" : "sem preço de uma das corretoras agora"}.</div>`; $("#vGo").disabled = true; return; }
   $("#vOps").innerHTML = d.opcoes.map((o, i) => `<button class="vop ${o.via === volta.via ? "on" : ""}" data-vvia="${o.via}">
-    <div class="hd"><b>${o.via === "pix" ? "⚡ Pix pelo banco" : "₮ Via USDT"} ${i === 0 ? `<span class="tag2">MAIS BARATO</span>` : ""}</b><span class="v good">${R(o.final)}</span></div>
-    <div class="row sp" style="font:500 11.5px var(--mono)"><span class="muted">custo: <b class="${o.custo > 0.005 ? "bad" : "good"}">${o.custo > 0.005 ? "−" + R(o.custo) : "grátis"}</b></span><span class="faint">chega ${o.tempo}</span></div>
-    <ol>${o.passos.map(p => `<li>${esc(p)}</li>`).join("")}</ol></button>`).join("");
+    <div class="hd"><b>${o.via === "pix" ? "⚡ Pix pelo banco" : "₮ Via USDT"} ${i === 0 && d.opcoes.length > 1 ? `<span class="tag2">MAIS BARATO</span>` : ""}</b><span class="v good">${R(o.final)}</span></div>
+    <div class="row sp" style="font:500 11.5px var(--mono)"><span class="muted">custo: <b class="${o.custo > 0.005 ? "bad" : "good"}">${o.custo > 0.005 ? "−" + R(o.custo) : o.custo < -0.005 ? "+" + R(-o.custo) + " (o preço ajuda)" : "grátis"}</b></span><span class="faint">chega ${o.tempo}</span></div>
+    <ol>${o.passos.map(p => `<li>${esc(p)}</li>`).join("")}</ol></button>`).join("")
+    + (d.opcoes.every(o => o.via !== "pix") ? `<div class="faint" style="font-size:12px">Sem Pix neste caminho: ${PIX_SAQUE[d.c] == null ? `a ${nome(d.c)} não saca reais por Pix` : `a ${N} não recebe reais por Pix`}. Igual à vida real, vai por USDT.</div>` : "");
   const o = d.opcoes.find(x => x.via === volta.via);
-  $("#vInfo").innerHTML = o && o.custo > 0.005 ? `<div class="aviso">A volta custa ${R(o.custo)}. Esse custo entra no histórico como "↩ VOLTA" e é descontado do lucro${d.credito ? ` (lucro guardado das idas: ${R(d.credito)})` : ""}.</div>` : `<div class="aviso" style="color:var(--good);border-color:var(--good-line);background:var(--good-soft)">Esta volta é grátis: chega tudo na Binance.</div>`;
-  $("#vGo").disabled = !o; $("#vGo").textContent = o ? `↩ Mandar ${R(o.final)} agora` : "↩ Mandar agora";
+  $("#vInfo").innerHTML = o && o.custo > 0.005 ? `<div class="aviso">A volta custa ${R(o.custo)}. Esse custo entra no histórico como "↩ VOLTA" e é descontado do lucro.</div>` : `<div class="aviso" style="color:var(--good);border-color:var(--good-line);background:var(--good-soft)">Chega tudo na ${N}${o && o.custo < -0.005 ? `, e ainda sobra ${R(-o.custo)} pela diferença de preço` : ""}.</div>`;
+  $("#vGo").disabled = !o; $("#vGo").textContent = o ? `↩ Mandar ${R(o.final)} para a ${N}` : "↩ Mandar agora";
 }
 document.addEventListener("click", async e => {
-  const b = e.target.closest("[data-volta]"); if(b){ abrirVolta(b.dataset.volta); return; }
+  const b = e.target.closest("[data-volta]"); if(b){ abrirVolta(b.dataset.volta, b.dataset.destino, b.dataset.valor); return; }
   const v = e.target.closest("[data-vvia]"); if(v && volta){ volta.via = v.dataset.vvia; desenharVolta(); return; }
   if(e.target.closest("[data-fechar-volta]")) $("#mVolta").hidden = true;
 });
+$("#vDest").addEventListener("change", () => { volta.dest = $("#vDest").value; calcularVolta(); });
+$("#vValor").addEventListener("change", () => { volta.valor = Math.max(0, +$("#vValor").value || 0); calcularVolta(); });
+$("#vTudo").addEventListener("click", () => { volta.valor = 0; $("#vValor").value = ""; calcularVolta(); });
 $("#vGo").addEventListener("click", async () => {
   if(!volta || !volta.d) return;
   $("#vGo").disabled = true; $("#vGo").textContent = "Mandando…";
   try{
-    const r = await fetch("/api/devolver", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({c: volta.c, via: volta.via})});
+    const r = await fetch("/api/devolver", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({c: volta.c, via: volta.via, d: volta.dest, valor: volta.valor || 0})});
     const d = await r.json(); if(!d.ok) throw new Error(d.erro || "não mandou");
     $("#mVolta").hidden = true;
-    toast(`${R(d.final)} de volta na Binance${d.custo > 0.005 ? ` (custo ${R(d.custo)})` : " (grátis)"}.`);
+    toast(`${R(d.final)} chegaram na ${nome(d.para || volta.dest)}${d.custo > 0.005 ? ` (custo ${R(d.custo)})` : ""}.`);
     await lerServidor();
   }catch(err){ toast("Não consegui mandar: " + err.message, "bad"); desenharVolta(); }
 });
@@ -1469,7 +1489,7 @@ function renderPerformance(){
     k("Volume operado", R(vol), h.length ? `média ${R(vol/h.length)} por operação` : "—"),
     k("Melhor rota", ord[0] ? `${nome(ord[0][0].split("|")[0])} → ${nome(ord[0][0].split("|")[1])}` : "—", ord[0] ? `${RS(ord[0][1].lucro)} em ${ord[0][1].n} operações` : "", "acc"),
     k("Melhor / pior operação", melhor ? `<span class="good">${RS(melhor.lucro)}</span> <span class="faint">/</span> <span class="${pior.lucro<0?"bad":"good"}">${RS(pior.lucro)}</span>` : "—", h.length ? `${h.filter(x => x.lucro > 0).length} de ${h.length} com lucro` : ""),
-    k("Taxa de acerto", h.filter(x => !x.volta).length ? nf(h.filter(x => !x.volta && x.lucro > 0).length/h.filter(x => !x.volta).length*100, 0) + "%" : "—", `operações com lucro · ${h.filter(x => x.volta).length} voltas para a Binance (custo ${R(-h.filter(x => x.volta).reduce((t, x) => t + x.lucro, 0))})`),
+    k("Taxa de acerto", h.filter(x => !x.volta).length ? nf(h.filter(x => !x.volta && x.lucro > 0).length/h.filter(x => !x.volta).length*100, 0) + "%" : "—", `operações com lucro · ${h.filter(x => x.volta).length} voltas entre corretoras (custo ${R(-h.filter(x => x.volta).reduce((t, x) => t + x.lucro, 0))})`),
   ].join("");
   const o = [...h].sort((a, b) => a.t - b.t); let acc = 0; const pts = o.map(x => [x.t, acc += x.lucro]);
   $("#chPnl").innerHTML = pts.length < 2 ? `<div class="empty">Faça pelo menos duas operações para ver o gráfico.</div>` : grafLinha(pts);
@@ -1518,7 +1538,7 @@ function renderHistorico(){
     <td><span class="onde">${logo(x.a, "sm")}${nome(x.a)} <span class="faint">→</span> ${logo(x.b, "sm")}${nome(x.b)}</span></td>
     <td class="r num">${R(x.valor)}</td>${x.volta && ciclo[x.id] ? `<td class="r num"><span class="faint" style="font-size:11.5px">taxa ${R(-x.lucro)}</span><br><b class="${ciclo[x.id].lucro>=0?"good":"bad"}">${RS(ciclo[x.id].lucro)}</b></td><td class="r num"><span class="faint" style="font-size:11.5px">ciclo</span><br><b class="${ciclo[x.id].lucro>=0?"good":"bad"}">${pct(ciclo[x.id].lucro/ciclo[x.id].base*100, 2)}</b></td>` : `<td class="r num ${x.lucro>=0?"good":"bad"}">${RS(x.lucro)}</td><td class="r num ${x.lucro>=0?"good":"bad"}">${pct(x.pct, 2)}</td>`}
     <td>${x.volta ? (ciclo[x.id] ? `<span class="tg ${ciclo[x.id].lucro>=0?"ok":"bad"}">CICLO ${ciclo[x.id].lucro>=0?"OK":"PERDA"}</span>` : "") : `<span class="tg ${x.lucro>=0?"ok":"bad"}">${x.lucro>=0?"OK":"PERDA"}</span>`} ${x.auto ? `<span class="tg auto">AUTO</span>` : ""}${x.forcada ? ` <span class="tg">FORÇADA</span>` : ""}${x.retorno || x.volta ? ` <span class="tg" style="color:var(--good)">↩ VOLTA${x.viaVolta ? " · " + x.viaVolta.toUpperCase() : ""}</span>` : ""}</td></tr>
-    ${abertoHist === String(x.id) && x.volta ? `<tr class="det"><td colspan="6">Dinheiro mandado de volta da ${nome(x.a)} para a Binance por ${x.viaVolta === "pix" ? "Pix (saque para o banco e Pix para a Binance)" : "USDT (comprou USDT, sacou e vendeu na Binance)"}. Saiu ${R(x.valor)}, chegou ${R(x.final)}. Custo da volta: ${R(x.taxas || 0)}.${ciclo[x.id] ? ` <b>Ciclo completo</b> (ida + volta): lucro das idas ${RS(ciclo[x.id].idas)} − taxa da volta ${R(-x.lucro)} = <b class="${ciclo[x.id].lucro>=0?"good":"bad"}">${RS(ciclo[x.id].lucro)}</b>.` : ""}</td></tr>` : abertoHist === String(x.id) ? `<tr class="det"><td colspan="6">Comprou ${nf(x.usdt, 4)} USDT a ${P4(x.compra)} na ${nome(x.a)} e vendeu a ${P4(x.venda)} na ${nome(x.b)}${x.via ? ` (passando por ${x.via.map(nome).join(", ")})` : ""}. Investido ${R(x.valor)} → recebido ${R(x.final)}. Taxas ${R(x.taxas || 0)}. Previsto na entrada ${RS(x.previsto || 0)}. Duração ${x.duracao ? Math.round(x.duracao/1000) + " s" : "—"}.</td></tr>` : ""}`).join("")
+    ${abertoHist === String(x.id) && x.volta ? `<tr class="det"><td colspan="6">Dinheiro mandado da ${nome(x.a)} para a ${nome(x.b)} por ${x.viaVolta === "pix" ? `Pix (saque para o banco e Pix para a ${nome(x.b)})` : `USDT (comprou USDT, sacou e vendeu na ${nome(x.b)})`}. Saiu ${R(x.valor)}, chegou ${R(x.final)}. Custo da volta: ${R(x.taxas || 0)}.${ciclo[x.id] ? ` <b>Ciclo completo</b> (ida + volta): lucro das idas ${RS(ciclo[x.id].idas)} − taxa da volta ${R(-x.lucro)} = <b class="${ciclo[x.id].lucro>=0?"good":"bad"}">${RS(ciclo[x.id].lucro)}</b>.` : ""}</td></tr>` : abertoHist === String(x.id) ? `<tr class="det"><td colspan="6">Comprou ${nf(x.usdt, 4)} USDT a ${P4(x.compra)} na ${nome(x.a)} e vendeu a ${P4(x.venda)} na ${nome(x.b)}${x.via ? ` (passando por ${x.via.map(nome).join(", ")})` : ""}. Investido ${R(x.valor)} → recebido ${R(x.final)}. Taxas ${R(x.taxas || 0)}. Previsto na entrada ${RS(x.previsto || 0)}. Duração ${x.duracao ? Math.round(x.duracao/1000) + " s" : "—"}.</td></tr>` : ""}`).join("")
     : `<tr><td colspan="6" class="empty">Nenhuma operação ainda.</td></tr>`;
   $("#hPag").textContent = `página ${pagHist+1} de ${tot}`;
   $("#hPrev").disabled = pagHist === 0; $("#hNext").disabled = pagHist >= tot-1;

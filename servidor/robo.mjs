@@ -868,8 +868,8 @@ http.createServer(async (req, res) => {
         if (rota === "tick") return enviar(200, await SIM.tick());
         if (rota === "executar" && req.method === "POST") { const r = await SIM.executarManual(b.a, b.b, b.valor); return enviar(r.ok ? 200 : 409, r); }
         if (rota === "vender" && req.method === "POST") return enviar(200, await SIM.venderAgora(b.id));
-        if (rota === "volta") return enviar(200, await SIM.opcoesVolta(url.searchParams.get("c")));
-        if (rota === "devolver" && req.method === "POST") { const r = await SIM.devolver(b.c, b.via); return enviar(r.ok ? 200 : 409, r); }
+        if (rota === "volta") return enviar(200, await SIM.opcoesVolta(url.searchParams.get("c"), url.searchParams.get("d"), url.searchParams.get("valor")));
+        if (rota === "devolver" && req.method === "POST") { const r = await SIM.devolver(b.c, b.via, b.d, b.valor); return enviar(r.ok ? 200 : 409, r); }
         if (rota === "robo") {
           if (req.method === "POST") {
             if (typeof b.ligado !== "boolean") return enviar(400, { erro: "envie { ligado: true ou false }" });
