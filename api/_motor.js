@@ -108,6 +108,20 @@ function migrar(e) {
     e.taxasVersao = 8;
     log(e, "OKX conectada ao simulador (USDT/BRL). A Chainless agora usa BRZ na KyberSwap, que costuma pagar mais que o BRLA.", "acc");
   }
+  if ((e.taxasVersao || 0) < 9) {
+    // 27/10: recomeçar do zero com R$ 5.000 em CADA corretora, para enxergar as oportunidades de todas
+    const h = e.hist || [];
+    e.rodadasAnteriores = e.rodadasAnteriores || [];
+    e.rodadasAnteriores.push({ fim: Date.now(), aportes: e.aportes, operacoes: h.length, lucro: h.reduce((t, x) => t + (x.lucro || 0), 0), hist: h, saldos: e.saldos });
+    const TODAS = ["binance", "bitget", "okx", "mercadobitcoin", "bitso", "bybit", "foxbit", "picnic", "avenia", "chainless", "polygon"];
+    for (const c of Object.keys(e.saldos)) e.saldos[c] = { brl: 0, usdt: 0 };
+    for (const c of TODAS) e.saldos[c] = { brl: 5000, usdt: 0 };
+    e.config.corretoras = TODAS.filter(c => c in e.config.taxas);
+    e.aportes = 5000 * TODAS.length; e.hist = []; e.pendentes = []; e.pendente = null; e.ultimaOp = 0; e.credito = 0;
+    e.config.max = 5000; e.ligado = false; e.criado = Date.now();
+    e.taxasVersao = 9;
+    e.log = [{ t: Date.now(), txt: `Simulação zerada: R$ 5.000 em cada uma das ${TODAS.length} corretoras (R$ ${(5000 * TODAS.length).toLocaleString("pt-BR")} no total). Automático desligado.`, tipo: "good" }];
+  }
 }
 const MAX_SIMULTANEAS = 1; // uma operação por vez (pedido do usuário em 20/10)
 // várias operações ao mesmo tempo; "pendente" continua existindo (a mais antiga) para o painel
