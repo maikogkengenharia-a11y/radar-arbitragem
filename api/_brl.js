@@ -62,13 +62,22 @@ async function binance(caminho) {
   catch { return await j(`https://api.binance.com/api/v3/${caminho}`); }
 }
 
+// livro BRL/USDT (preço em USDT de 1 real) → livro USDT/BRL
+// comprar USDT = vender reais (usa os bids do BRL/USDT); vender USDT = comprar reais (usa os asks)
+function inverter(asksBrl, bidsBrl) {
+  const conv = l => par(l).map(([p, q]) => [1 / p, q * p]);
+  return [conv(bidsBrl), conv(asksBrl)];
+}
 // Livro de ofertas de USDT/BRL: { asks: [[preço, qtd]...], bids: [...] }
 export const LIVRO_BRL = {
   binance: async () => { const d = await binance("depth?symbol=USDTBRL&limit=50"); return [d.asks, d.bids]; },
   bitget: async () => { const d = await j("https://api.bitget.com/api/v2/spot/market/orderbook?symbol=USDTBRL&type=step0&limit=50"); return [d.data?.asks, d.data?.bids]; },
   bybit: async () => { const d = await j("https://api.bybit.com/v5/market/orderbook?category=spot&symbol=USDTBRL&limit=50"); return [d.result?.a, d.result?.b]; },
   okx: async () => { const d = await j("https://www.okx.com/api/v5/market/books?instId=USDT-BRL&sz=50"); return [d.data?.[0]?.asks, d.data?.[0]?.bids]; },
-  kucoin: async () => { const d = await j("https://api.kucoin.com/api/v1/market/orderbook/level2_100?symbol=USDT-BRL"); return [d.data?.asks, d.data?.bids]; },
+  kucoin: async () => {
+    try { const d = await j("https://api.kucoin.com/api/v1/market/orderbook/level2_100?symbol=USDT-BRL"); if (d.data?.asks?.length) return [d.data.asks, d.data.bids]; } catch {}
+    const d = await j("https://api.kucoin.com/api/v1/market/orderbook/level2_100?symbol=BRL-USDT"); return inverter(d.data?.asks, d.data?.bids);
+  },
   mercadobitcoin: async () => {
     try { const d = await j("https://api.mercadobitcoin.net/api/v4/USDT-BRL/orderbook?limit=50"); return [d.asks, d.bids]; }
     catch { const d = await j("https://www.mercadobitcoin.net/api/USDT/orderbook/"); return [d.asks, d.bids]; }
@@ -76,7 +85,11 @@ export const LIVRO_BRL = {
   bitso: async () => { const d = await j("https://api.bitso.com/v3/order_book/?book=usdt_brl&aggregate=true"); return [d.payload?.asks, d.payload?.bids]; },
   novadax: async () => { const d = await j("https://api.novadax.com/v1/market/depth?symbol=USDT_BRL&limit=50"); return [d.data?.asks, d.data?.bids]; },
   foxbit: async () => { const d = await j("https://api.foxbit.com.br/rest/v3/markets/usdtbrl/orderbook?depth=50"); return [d.asks, d.bids]; },
-  mexc: async () => { const d = await j("https://api.mexc.com/api/v3/depth?symbol=USDTBRL&limit=50"); return [d.asks, d.bids]; },
+  // a MEXC lista o par ao contrário (BRL/USDT): o preço é quantos dólares vale 1 real, então a conta é invertida
+  mexc: async () => {
+    try { const d = await j("https://api.mexc.com/api/v3/depth?symbol=USDTBRL&limit=50"); if (d.asks?.length) return [d.asks, d.bids]; } catch {}
+    const d = await j("https://api.mexc.com/api/v3/depth?symbol=BRLUSDT&limit=50"); return inverter(d.asks, d.bids);
+  },
   avenia: () => livroKyber("BRLA"), picnic: () => livroKyber("BRLA"), polygon: () => livroKyber("BRLA"),
   chainless: () => livroKyber("BRZ"),
 };

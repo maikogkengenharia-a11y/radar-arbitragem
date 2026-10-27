@@ -27,7 +27,7 @@ const FONTES = {
   gate: async () => (await j("https://api.gateio.ws/api/v4/spot/tickers") || [])
     .map(x => [x.currency_pair, base(x.currency_pair, "_USDT"), x.highest_bid, x.lowest_ask, x.quote_volume]),
 };
-const BRL_CEX = ["binance", "bitget", "bybit", "okx", "mercadobitcoin", "bitso", "foxbit"];
+const BRL_CEX = ["binance", "bitget", "bybit", "okx", "mercadobitcoin", "bitso", "foxbit", "mexc", "kucoin"];
 
 let cache = { t: 0, v: null };
 

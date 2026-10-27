@@ -4,12 +4,12 @@ import { livroBrl } from "../api/_brl.js";
 
 export const NOME = {
   binance: "Binance", bitget: "Bitget", bybit: "Bybit", okx: "OKX", mercadobitcoin: "Mercado Bitcoin",
-  bitso: "Bitso", foxbit: "Foxbit", polygon: "KyberSwap BRLA (Picnic/Avenia)", chainless: "KyberSwap BRZ (Chainless)",
+  bitso: "Bitso", foxbit: "Foxbit", mexc: "MEXC", kucoin: "KuCoin", polygon: "KyberSwap BRLA (Picnic/Avenia)", chainless: "KyberSwap BRZ (Chainless)",
 };
 const LISTA = Object.keys(NOME);
 // mesmas taxas do simulador: negociação (%) e saque do USDT (em USDT, rede mais barata)
-const TAXA = { binance: 0.10, bitget: 0.10, bybit: 0.10, okx: 0.10, mercadobitcoin: 0.70, bitso: 0.65, foxbit: 0.50, polygon: 0.02, chainless: 0.05 };
-const SAQUE = { binance: 0.03, bitget: 0.10, bybit: 0.30, okx: 0.50, mercadobitcoin: 1, bitso: 1, foxbit: 1, polygon: 0.02, chainless: 0.02 };
+const TAXA = { binance: 0.10, bitget: 0.10, bybit: 0.10, okx: 0.10, mercadobitcoin: 0.70, bitso: 0.65, foxbit: 0.50, mexc: 0.05, kucoin: 0.10, polygon: 0.02, chainless: 0.05 };
+const SAQUE = { binance: 0.03, bitget: 0.10, bybit: 0.30, okx: 0.50, mercadobitcoin: 1, bitso: 1, foxbit: 1, mexc: 0.10, kucoin: 1, polygon: 0.02, chainless: 0.02 };
 
 function compra(asks, brl) {
   let usdt = 0, resto = brl;
